@@ -1267,7 +1267,7 @@ task_finished:
 }
 
 bool task_push_core_restore(const char *backup_path, const char *dir_libretro,
-      bool *core_loaded)
+      bool *core_loaded, retro_task_t **out_task)
 {
    size_t _len;
    task_finder_data_t find_data;
@@ -1421,9 +1421,15 @@ bool task_push_core_restore(const char *backup_path, const char *dir_libretro,
    /* Push task */
    task_queue_push(task);
 
+   if (out_task)
+      *out_task = task;
+
    return true;
 
 error:
+
+   if (out_task)
+      *out_task = NULL;
 
    /* Clean up task */
    if (task)

@@ -402,7 +402,20 @@ void frontend_android_get_version_sdk(int32_t *sdk);
 bool is_screen_reader_enabled(void);
 
 #ifdef HAVE_SAF
+/* What a pending 'pick a SAF folder' request will do with the tree
+ * once the user picks one and safTreeAdded() fires. BROWSE is the
+ * long-standing default (push the tree into the content file
+ * browser); the bulk core install/backup entries in "Manage Cores"
+ * request the other two (see docs/retroarch-android-bulk-cores.md). */
+enum android_saf_purpose
+{
+   ANDROID_SAF_PURPOSE_BROWSE = 0,
+   ANDROID_SAF_PURPOSE_BULK_INSTALL_CORES,
+   ANDROID_SAF_PURPOSE_BACKUP_CORES
+};
+
 void android_show_saf_tree_picker(void);
+void android_show_saf_tree_picker_purpose(enum android_saf_purpose purpose);
 #endif
 
 #endif

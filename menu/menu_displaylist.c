@@ -1263,6 +1263,123 @@ static unsigned menu_displaylist_parse_core_backup_list(
    return count;
 }
 
+#if defined(ANDROID) && defined(HAVE_SAF)
+/* Single-batch confirmation screen for bulk core install from a
+ * SAF folder (see docs/retroarch-android-bulk-cores.md). Rows are
+ * built from the pending scan populated by core_bulk_install_scan()
+ * (tasks/task_core_bulk_install.c); the actual install only starts
+ * if/when the user presses the trailing "Install All" row. */
+static unsigned menu_displaylist_parse_core_bulk_install_confirm_list(file_list_t *list)
+{
+   unsigned count        = 0;
+   size_t num_pending    = core_bulk_install_pending_count();
+   size_t num_overwrite  = core_bulk_install_pending_overwrite_count();
+   size_t i;
+   char header[256];
+
+   if (num_pending == 0)
+      return 0;
+
+   snprintf(header, sizeof(header),
+         "%u core file(s) found - %u will overwrite an installed core",
+         (unsigned)num_pending, (unsigned)num_overwrite);
+
+   if (menu_entries_append(list, header,
+         MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST_STR,
+         MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST,
+         0, 0, 0, NULL))
+      count++;
+
+   for (i = 0; i < num_pending; i++)
+   {
+      const char *filename = core_bulk_install_pending_filename(i);
+      char row[PATH_MAX_LENGTH];
+
+      if (!filename)
+         continue;
+
+      snprintf(row, sizeof(row), "%s%s", filename,
+            core_bulk_install_pending_is_overwrite(i)
+                  ? "  [overwrite]" : "  [new]");
+
+      if (menu_entries_append(list, row,
+            MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST_STR,
+            MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST,
+            0, 0, 0, NULL))
+         count++;
+   }
+
+   if (menu_entries_append(list,
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_CONFIRM),
+         MENU_ENUM_LABEL_CORE_BULK_INSTALL_CONFIRM_STR,
+         MENU_ENUM_LABEL_CORE_BULK_INSTALL_CONFIRM,
+         MENU_SETTING_ACTION, 0, 0, NULL))
+      count++;
+
+   if (menu_entries_append(list,
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_CANCEL),
+         MENU_ENUM_LABEL_CORE_BULK_INSTALL_CANCEL_STR,
+         MENU_ENUM_LABEL_CORE_BULK_INSTALL_CANCEL,
+         MENU_SETTING_ACTION, 0, 0, NULL))
+      count++;
+
+   return count;
+}
+
+/* Same shape as above, for bulk core backup to a SAF folder. */
+static unsigned menu_displaylist_parse_core_bulk_backup_confirm_list(file_list_t *list)
+{
+   unsigned count      = 0;
+   size_t num_pending  = core_bulk_backup_pending_count();
+   uint64_t total_size = core_bulk_backup_pending_total_size();
+   size_t i;
+   char header[256];
+
+   if (num_pending == 0)
+      return 0;
+
+   snprintf(header, sizeof(header),
+         "%u installed core(s) - ~%.1f MB total",
+         (unsigned)num_pending, (double)total_size / (1024.0 * 1024.0));
+
+   if (menu_entries_append(list, header,
+         MENU_ENUM_LABEL_DEFERRED_CORE_BULK_BACKUP_CONFIRM_LIST_STR,
+         MENU_ENUM_LABEL_DEFERRED_CORE_BULK_BACKUP_CONFIRM_LIST,
+         0, 0, 0, NULL))
+      count++;
+
+   for (i = 0; i < num_pending; i++)
+   {
+      const char *filename = core_bulk_backup_pending_filename(i);
+
+      if (!filename)
+         continue;
+
+      if (menu_entries_append(list, filename,
+            MENU_ENUM_LABEL_DEFERRED_CORE_BULK_BACKUP_CONFIRM_LIST_STR,
+            MENU_ENUM_LABEL_DEFERRED_CORE_BULK_BACKUP_CONFIRM_LIST,
+            0, 0, 0, NULL))
+         count++;
+   }
+
+   if (menu_entries_append(list,
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_CONFIRM),
+         MENU_ENUM_LABEL_CORE_BULK_BACKUP_CONFIRM_STR,
+         MENU_ENUM_LABEL_CORE_BULK_BACKUP_CONFIRM,
+         MENU_SETTING_ACTION, 0, 0, NULL))
+      count++;
+
+   if (menu_entries_append(list,
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_CANCEL),
+         MENU_ENUM_LABEL_CORE_BULK_BACKUP_CANCEL_STR,
+         MENU_ENUM_LABEL_CORE_BULK_BACKUP_CANCEL,
+         MENU_SETTING_ACTION, 0, 0, NULL))
+      count++;
+
+   return count;
+}
+#endif
+
 static unsigned menu_displaylist_parse_core_manager_list(file_list_t *list,
       bool kiosk_mode_enable)
 {
@@ -1336,6 +1453,26 @@ static unsigned menu_displaylist_parse_core_manager_list(file_list_t *list,
             MENU_ENUM_LABEL_SIDELOAD_CORE_LIST,
             MENU_SETTING_ACTION, 0, 0, NULL))
          count++;
+#endif
+
+#if defined(ANDROID) && defined(HAVE_SAF)
+   /* Bulk core install/backup via a user-selected SAF folder
+    * (see docs/retroarch-android-bulk-cores.md) */
+   if (!kiosk_mode_enable)
+   {
+      if (menu_entries_append(list,
+            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_SAF),
+            MENU_ENUM_LABEL_CORE_BULK_INSTALL_SAF_STR,
+            MENU_ENUM_LABEL_CORE_BULK_INSTALL_SAF,
+            MENU_SETTING_ACTION, 0, 0, NULL))
+         count++;
+      if (menu_entries_append(list,
+            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_SAF),
+            MENU_ENUM_LABEL_CORE_BULK_BACKUP_SAF_STR,
+            MENU_ENUM_LABEL_CORE_BULK_BACKUP_SAF,
+            MENU_SETTING_ACTION, 0, 0, NULL))
+         count++;
+   }
 #endif
 
    {
@@ -14471,6 +14608,20 @@ bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type,
                                  | MD_FLAG_NEED_PUSH
                                  | MD_FLAG_NEED_NAVIGATION_CLEAR;
             break;
+#if defined(ANDROID) && defined(HAVE_SAF)
+         case DISPLAYLIST_CORE_BULK_INSTALL_CONFIRM_LIST:
+            menu_entries_clear(info->list);
+            count                = menu_displaylist_parse_core_bulk_install_confirm_list(info->list);
+            info->flags         |= MD_FLAG_NEED_REFRESH
+                                 | MD_FLAG_NEED_PUSH;
+            break;
+         case DISPLAYLIST_CORE_BULK_BACKUP_CONFIRM_LIST:
+            menu_entries_clear(info->list);
+            count                = menu_displaylist_parse_core_bulk_backup_confirm_list(info->list);
+            info->flags         |= MD_FLAG_NEED_REFRESH
+                                 | MD_FLAG_NEED_PUSH;
+            break;
+#endif
          case DISPLAYLIST_CORE_MANAGER_LIST:
             {
                /* When a core is deleted, the number of items in

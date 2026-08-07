@@ -105,6 +105,7 @@
 #if defined(ANDROID)
 #include "../../file_path_special.h"
 #include "../../play_feature_delivery/play_feature_delivery.h"
+#include "../../frontend/drivers/platform_unix.h"
 #endif
 
 #if defined(HAVE_LIBNX)
@@ -356,6 +357,12 @@ static enum msg_hash_enums action_ok_dl_to_enum(unsigned lbl)
          return MENU_ENUM_LABEL_DEFERRED_CORE_RESTORE_BACKUP_LIST;
       case ACTION_OK_DL_CORE_DELETE_BACKUP_LIST:
          return MENU_ENUM_LABEL_DEFERRED_CORE_DELETE_BACKUP_LIST;
+#if defined(ANDROID) && defined(HAVE_SAF)
+      case ACTION_OK_DL_CORE_BULK_INSTALL_CONFIRM_LIST:
+         return MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST;
+      case ACTION_OK_DL_CORE_BULK_BACKUP_CONFIRM_LIST:
+         return MENU_ENUM_LABEL_DEFERRED_CORE_BULK_BACKUP_CONFIRM_LIST;
+#endif
       case ACTION_OK_DL_VIDEO_SETTINGS_LIST:
          return MENU_ENUM_LABEL_DEFERRED_VIDEO_SETTINGS_LIST;
       case ACTION_OK_DL_VIDEO_SYNCHRONIZATION_SETTINGS_LIST:
@@ -1886,6 +1893,12 @@ int generic_action_ok_displaylist_push(
          ACTION_OK_DL_LBL(action_ok_dl_to_enum(action_type), DISPLAYLIST_GENERIC);
          info_path          = label;
          break;
+#if defined(ANDROID) && defined(HAVE_SAF)
+      case ACTION_OK_DL_CORE_BULK_INSTALL_CONFIRM_LIST:
+      case ACTION_OK_DL_CORE_BULK_BACKUP_CONFIRM_LIST:
+         ACTION_OK_DL_LBL(action_ok_dl_to_enum(action_type), DISPLAYLIST_GENERIC);
+         break;
+#endif
       case ACTION_OK_DL_CONTENT_SETTINGS:
          info.list          = MENU_LIST_GET_SELECTION(menu_list, 0);
          info_path          = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CONTENT_SETTINGS);
@@ -5973,10 +5986,10 @@ static int action_ok_sideload_core(const char *path,
       char backup_path[PATH_MAX_LENGTH];
       fill_pathname_join_special(
             backup_path, menu_path, path, sizeof(backup_path));
-      task_push_core_restore(backup_path, dir_libretro, &core_loaded);
+      task_push_core_restore(backup_path, dir_libretro, &core_loaded, NULL);
    }
    else
-      task_push_core_restore(path, dir_libretro, &core_loaded);
+      task_push_core_restore(path, dir_libretro, &core_loaded, NULL);
 
    /* Flush stack
     * > Since the 'sideload core' option is present
@@ -8767,7 +8780,7 @@ static int action_ok_core_restore_backup(const char *path,
     *   (otherwise user will be faced with 'no information
     *   available' when popping the stack - this would be
     *   confusing/ugly) */
-   if (   task_push_core_restore(backup_path, dir_libretro, &core_loaded)
+   if (   task_push_core_restore(backup_path, dir_libretro, &core_loaded, NULL)
        && core_loaded)
       menu_entries_flush_stack(NULL, 0);
    return 0;
@@ -8788,6 +8801,78 @@ static int action_ok_core_delete_backup(const char *path,
                                     | MENU_ST_FLAG_PREVENT_POPULATE;
    return 0;
 }
+
+#if defined(ANDROID) && defined(HAVE_SAF)
+/* Bulk core install/backup via a user-selected SAF folder.
+ * See docs/retroarch-android-bulk-cores.md and
+ * tasks/task_core_bulk_install.c / tasks/task_core_bulk_backup.c. */
+
+static int action_ok_core_bulk_install_saf(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   android_show_saf_tree_picker_purpose(ANDROID_SAF_PURPOSE_BULK_INSTALL_CORES);
+   return 0;
+}
+
+static int action_ok_core_bulk_backup_saf(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   android_show_saf_tree_picker_purpose(ANDROID_SAF_PURPOSE_BACKUP_CORES);
+   return 0;
+}
+
+static int action_ok_core_bulk_install_confirm(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   struct menu_state *menu_st  = menu_state_get_ptr();
+   size_t new_selection_ptr    = menu_st->selection_ptr;
+
+   task_push_core_bulk_install();
+
+   menu_entries_pop_stack(&new_selection_ptr, 0, 1);
+   menu_st->selection_ptr      = new_selection_ptr;
+   return 0;
+}
+
+static int action_ok_core_bulk_install_cancel(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   struct menu_state *menu_st  = menu_state_get_ptr();
+   size_t new_selection_ptr    = menu_st->selection_ptr;
+
+   core_bulk_install_cancel_pending();
+
+   menu_entries_pop_stack(&new_selection_ptr, 0, 1);
+   menu_st->selection_ptr      = new_selection_ptr;
+   return 0;
+}
+
+static int action_ok_core_bulk_backup_confirm(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   struct menu_state *menu_st  = menu_state_get_ptr();
+   size_t new_selection_ptr    = menu_st->selection_ptr;
+
+   task_push_core_bulk_backup();
+
+   menu_entries_pop_stack(&new_selection_ptr, 0, 1);
+   menu_st->selection_ptr      = new_selection_ptr;
+   return 0;
+}
+
+static int action_ok_core_bulk_backup_cancel(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   struct menu_state *menu_st  = menu_state_get_ptr();
+   size_t new_selection_ptr    = menu_st->selection_ptr;
+
+   core_bulk_backup_cancel_pending();
+
+   menu_entries_pop_stack(&new_selection_ptr, 0, 1);
+   menu_st->selection_ptr      = new_selection_ptr;
+   return 0;
+}
+#endif
 
 /* Do not declare this static - it is also used
  * in menu_cbs_left.c and menu_cbs_right.c */
@@ -9540,6 +9625,14 @@ static int menu_cbs_init_bind_ok_compare_label(menu_file_list_cbs_t *cbs,
 #endif
          {MENU_ENUM_LABEL_CORE_RESTORE_BACKUP_LIST,            action_ok_push_core_restore_backup_list},
          {MENU_ENUM_LABEL_CORE_DELETE_BACKUP_LIST,             action_ok_push_core_delete_backup_list},
+#if defined(ANDROID) && defined(HAVE_SAF)
+         {MENU_ENUM_LABEL_CORE_BULK_INSTALL_SAF,               action_ok_core_bulk_install_saf},
+         {MENU_ENUM_LABEL_CORE_BULK_BACKUP_SAF,                action_ok_core_bulk_backup_saf},
+         {MENU_ENUM_LABEL_CORE_BULK_INSTALL_CONFIRM,           action_ok_core_bulk_install_confirm},
+         {MENU_ENUM_LABEL_CORE_BULK_INSTALL_CANCEL,            action_ok_core_bulk_install_cancel},
+         {MENU_ENUM_LABEL_CORE_BULK_BACKUP_CONFIRM,            action_ok_core_bulk_backup_confirm},
+         {MENU_ENUM_LABEL_CORE_BULK_BACKUP_CANCEL,             action_ok_core_bulk_backup_cancel},
+#endif
          {MENU_ENUM_LABEL_PLAYLIST_MANAGER_SETTINGS,           action_ok_push_playlist_manager_settings},
          {MENU_ENUM_LABEL_PLAYLIST_MANAGER_RESET_CORES,        action_ok_playlist_reset_cores},
          {MENU_ENUM_LABEL_PLAYLIST_MANAGER_CLEAN_PLAYLIST,     action_ok_playlist_clean},

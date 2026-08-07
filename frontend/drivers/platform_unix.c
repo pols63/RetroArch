@@ -60,6 +60,7 @@
 #ifdef HAVE_SAF
 #include <vfs/vfs_implementation_saf.h>
 #include "../../menu/menu_cbs.h"
+#include "../../tasks/tasks_internal.h"
 #endif
 #endif
 
@@ -676,7 +677,13 @@ static void frontend_android_shutdown(bool unused)
 }
 
 #ifdef HAVE_SAF
-void android_show_saf_tree_picker(void)
+/* What the next safTreeAdded() callback should do with the picked
+ * tree. Only one SAF tree pick can be in flight at a time (the
+ * picker is a modal Android activity result), so a single pending
+ * value is sufficient - see android_saf_purpose in platform_unix.h. */
+static enum android_saf_purpose android_saf_pending_purpose = ANDROID_SAF_PURPOSE_BROWSE;
+
+void android_show_saf_tree_picker_purpose(enum android_saf_purpose purpose)
 {
    JNIEnv *env;
 
@@ -687,7 +694,14 @@ void android_show_saf_tree_picker(void)
    if (!env)
       return;
 
+   android_saf_pending_purpose = purpose;
+
    CALL_VOID_METHOD(env, g_android->activity->clazz, g_android->requestOpenDocumentTree);
+}
+
+void android_show_saf_tree_picker(void)
+{
+   android_show_saf_tree_picker_purpose(ANDROID_SAF_PURPOSE_BROWSE);
 }
 #endif
 
@@ -701,7 +715,12 @@ JNIEXPORT void JNICALL Java_com_retroarch_browser_retroactivity_RetroActivityCom
 {
 #ifdef HAVE_SAF
    const char *tree;
-   char *serialized_path;
+   enum android_saf_purpose purpose = android_saf_pending_purpose;
+
+   /* Consume the pending purpose now so a future plain
+    * android_show_saf_tree_picker() (BROWSE) call is never
+    * accidentally treated as a leftover bulk install/backup. */
+   android_saf_pending_purpose = ANDROID_SAF_PURPOSE_BROWSE;
 
    tree = (*env)->GetStringUTFChars(env, tree_obj, NULL);
    if ((*env)->ExceptionOccurred(env))
@@ -711,17 +730,69 @@ JNIEXPORT void JNICALL Java_com_retroarch_browser_retroactivity_RetroActivityCom
       return;
    }
 
-   if ((serialized_path = retro_vfs_path_join_saf(tree, "")) != NULL)
+   switch (purpose)
    {
-      generic_action_ok_displaylist_push(
-            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_FILE_BROWSER_OPEN_PICKER),
-            serialized_path,
-            MENU_ENUM_LABEL_FAVORITES_STR,
-            MENU_SETTING_ACTION,
-            0,
-            0,
-            ACTION_OK_DL_CONTENT_LIST);
-      free(serialized_path);
+      case ANDROID_SAF_PURPOSE_BULK_INSTALL_CORES:
+      {
+         settings_t *settings     = config_get_ptr();
+         const char *dir_libretro = settings->paths.directory_libretro;
+
+         if (core_bulk_install_scan(tree, dir_libretro) > 0)
+            generic_action_ok_displaylist_push(
+                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_SAF),
+                  NULL,
+                  MENU_ENUM_LABEL_CORE_BULK_INSTALL_SAF_STR,
+                  MENU_SETTING_ACTION,
+                  0, 0,
+                  ACTION_OK_DL_CORE_BULK_INSTALL_CONFIRM_LIST);
+         else
+            runloop_msg_queue_push(
+                  "No core files found in that folder.",
+                  STRLEN_CONST("No core files found in that folder."),
+                  1, 100, true, NULL,
+                  MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
+      }
+      break;
+      case ANDROID_SAF_PURPOSE_BACKUP_CORES:
+      {
+         settings_t *settings     = config_get_ptr();
+         const char *dir_libretro = settings->paths.directory_libretro;
+
+         if (core_bulk_backup_scan(dir_libretro, tree) > 0)
+            generic_action_ok_displaylist_push(
+                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_SAF),
+                  NULL,
+                  MENU_ENUM_LABEL_CORE_BULK_BACKUP_SAF_STR,
+                  MENU_SETTING_ACTION,
+                  0, 0,
+                  ACTION_OK_DL_CORE_BULK_BACKUP_CONFIRM_LIST);
+         else
+            runloop_msg_queue_push(
+                  "No installed cores found to back up.",
+                  STRLEN_CONST("No installed cores found to back up."),
+                  1, 100, true, NULL,
+                  MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
+      }
+      break;
+      case ANDROID_SAF_PURPOSE_BROWSE:
+      default:
+      {
+         char *serialized_path;
+
+         if ((serialized_path = retro_vfs_path_join_saf(tree, "")) != NULL)
+         {
+            generic_action_ok_displaylist_push(
+                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_FILE_BROWSER_OPEN_PICKER),
+                  serialized_path,
+                  MENU_ENUM_LABEL_FAVORITES_STR,
+                  MENU_SETTING_ACTION,
+                  0,
+                  0,
+                  ACTION_OK_DL_CONTENT_LIST);
+            free(serialized_path);
+         }
+      }
+      break;
    }
 
    (*env)->ReleaseStringUTFChars(env, tree_obj, tree);

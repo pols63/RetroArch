@@ -137,6 +137,16 @@
 #define MENU_ENUM_LABEL_INPUT_SPLIT_JOYCON_STR "input_split_joycon"
 #define MENU_ENUM_LABEL_CORE_LIST_STR "load_core"
 #define MENU_ENUM_LABEL_SIDELOAD_CORE_LIST_STR "sideload_core"
+#if defined(ANDROID) && defined(HAVE_SAF)
+#define MENU_ENUM_LABEL_CORE_BULK_INSTALL_SAF_STR "core_bulk_install_saf"
+#define MENU_ENUM_LABEL_CORE_BULK_BACKUP_SAF_STR "core_bulk_backup_saf"
+#define MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST_STR "deferred_core_bulk_install_confirm_list"
+#define MENU_ENUM_LABEL_DEFERRED_CORE_BULK_BACKUP_CONFIRM_LIST_STR "deferred_core_bulk_backup_confirm_list"
+#define MENU_ENUM_LABEL_CORE_BULK_INSTALL_CONFIRM_STR "core_bulk_install_confirm"
+#define MENU_ENUM_LABEL_CORE_BULK_INSTALL_CANCEL_STR "core_bulk_install_cancel"
+#define MENU_ENUM_LABEL_CORE_BULK_BACKUP_CONFIRM_STR "core_bulk_backup_confirm"
+#define MENU_ENUM_LABEL_CORE_BULK_BACKUP_CANCEL_STR "core_bulk_backup_cancel"
+#endif
 #define MENU_ENUM_LABEL_SAVESTATE_LIST_STR "savestate_list"
 #define MENU_ENUM_LABEL_STATE_SLOT_RUN_STR "state_slot_run"
 #define MENU_ENUM_LABEL_CORE_OPTIONS_STR "core_options"

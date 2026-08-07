@@ -1405,6 +1405,10 @@ DATA RUNLOOP
 #include "../tasks/task_file_transfer.c"
 #include "../tasks/task_playlist_manager.c"
 #include "../tasks/task_core_backup.c"
+#if defined(ANDROID) && defined(HAVE_SAF)
+#include "../tasks/task_core_bulk_install.c"
+#include "../tasks/task_core_bulk_backup.c"
+#endif
 #ifdef HAVE_TRANSLATE
 #include "../tasks/task_translation.c"
 #endif

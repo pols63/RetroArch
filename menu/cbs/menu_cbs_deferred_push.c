@@ -278,6 +278,11 @@ GENERIC_DEFERRED_PUSH(deferred_push_manual_content_scan_dat_file,   DISPLAYLIST_
 GENERIC_DEFERRED_PUSH(deferred_push_core_restore_backup_list,       DISPLAYLIST_CORE_RESTORE_BACKUP_LIST)
 GENERIC_DEFERRED_PUSH(deferred_push_core_delete_backup_list,        DISPLAYLIST_CORE_DELETE_BACKUP_LIST)
 
+#if defined(ANDROID) && defined(HAVE_SAF)
+GENERIC_DEFERRED_PUSH(deferred_push_core_bulk_install_confirm_list, DISPLAYLIST_CORE_BULK_INSTALL_CONFIRM_LIST)
+GENERIC_DEFERRED_PUSH(deferred_push_core_bulk_backup_confirm_list,  DISPLAYLIST_CORE_BULK_BACKUP_CONFIRM_LIST)
+#endif
+
 GENERIC_DEFERRED_PUSH(deferred_push_core_manager_list,              DISPLAYLIST_CORE_MANAGER_LIST)
 
 #ifdef HAVE_MIST
@@ -800,6 +805,10 @@ static int menu_cbs_init_bind_deferred_push_compare_label(
       {MENU_ENUM_LABEL_MANUAL_CONTENT_SCAN_DAT_FILE, deferred_push_manual_content_scan_dat_file},
       {MENU_ENUM_LABEL_DEFERRED_CORE_RESTORE_BACKUP_LIST, deferred_push_core_restore_backup_list},
       {MENU_ENUM_LABEL_DEFERRED_CORE_DELETE_BACKUP_LIST, deferred_push_core_delete_backup_list},
+#if defined(ANDROID) && defined(HAVE_SAF)
+      {MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST, deferred_push_core_bulk_install_confirm_list},
+      {MENU_ENUM_LABEL_DEFERRED_CORE_BULK_BACKUP_CONFIRM_LIST, deferred_push_core_bulk_backup_confirm_list},
+#endif
       {MENU_ENUM_LABEL_DEFERRED_CORE_MANAGER_LIST, deferred_push_core_manager_list},
 #ifdef HAVE_MIST
       {MENU_ENUM_LABEL_DEFERRED_STEAM_SETTINGS_LIST, deferred_push_steam_settings_list},
@@ -943,6 +952,10 @@ static int menu_cbs_init_bind_deferred_push_compare_label(
          { MENU_ENUM_LABEL_MANUAL_CONTENT_SCAN_DAT_FILE, deferred_push_manual_content_scan_dat_file },
          { MENU_ENUM_LABEL_DEFERRED_CORE_RESTORE_BACKUP_LIST, deferred_push_core_restore_backup_list },
          { MENU_ENUM_LABEL_DEFERRED_CORE_DELETE_BACKUP_LIST, deferred_push_core_delete_backup_list },
+#if defined(ANDROID) && defined(HAVE_SAF)
+         { MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST, deferred_push_core_bulk_install_confirm_list },
+         { MENU_ENUM_LABEL_DEFERRED_CORE_BULK_BACKUP_CONFIRM_LIST, deferred_push_core_bulk_backup_confirm_list },
+#endif
          { MENU_ENUM_LABEL_DEFERRED_CORE_MANAGER_LIST, deferred_push_core_manager_list },
          { MENU_ENUM_LABEL_SIDELOAD_CORE_LIST, deferred_push_file_browser_select_sideload_core },
          { MENU_ENUM_LABEL_DEFERRED_ADD_TO_PLAYLIST_LIST, deferred_push_add_to_playlist_list },

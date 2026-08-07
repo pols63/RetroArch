@@ -1061,6 +1061,48 @@ MSG_HASH(
    MENU_ENUM_SUBLABEL_SIDELOAD_CORE_LIST,
    "Install or restore a core from the 'Downloads' directory."
    )
+#if defined(ANDROID) && defined(HAVE_SAF)
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_SAF,
+   "Install Cores from Folder (Bulk)"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CORE_BULK_INSTALL_SAF,
+   "Choose a folder and install every core file found in it, all at once."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_SAF,
+   "Backup Cores"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CORE_BULK_BACKUP_SAF,
+   "Copy every installed core to a folder you choose."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_CONFIRM,
+   "Install All"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CORE_BULK_INSTALL_CONFIRM,
+   "Install every core file listed above into the core directory."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_CANCEL,
+   "Cancel"
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_CONFIRM,
+   "Backup All"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CORE_BULK_BACKUP_CONFIRM,
+   "Copy every core listed above to the chosen folder."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_CANCEL,
+   "Cancel"
+   )
+#endif
 
 /* Main Menu > Load Content */
 

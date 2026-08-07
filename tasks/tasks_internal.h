@@ -187,11 +187,52 @@ void *task_push_core_backup(
       size_t auto_backup_history_size,
       const char *dir_core_assets, bool mute);
 
-/* NOTE: If 'core_loaded' is true, menu stack should be
- * flushed if task_push_core_restore() returns true */
+/* NOTE 1: If 'core_loaded' is true, menu stack should be
+ * flushed if task_push_core_restore() returns true
+ * NOTE 2: 'out_task' is optional (may be NULL). If non-NULL,
+ * it is set to the pushed retro_task_t* on success (for
+ * callers that need to poll RETRO_TASK_FLG_FINISHED on it,
+ * e.g. a bulk-install coordinator), or to NULL on failure. */
 bool task_push_core_restore(const char *backup_path,
       const char *dir_libretro,
-      bool *core_loaded);
+      bool *core_loaded,
+      retro_task_t **out_task);
+
+#if defined(ANDROID) && defined(HAVE_SAF)
+/* Bulk core install/backup via a user-selected SAF folder
+ * (see docs/retroarch-android-bulk-cores.md).
+ *
+ * Usage pattern for both: call the '_scan' function synchronously
+ * (e.g. right after the SAF tree picker returns) to populate a
+ * pending list; inspect it via the '_pending_*' getters to build a
+ * single batch confirmation screen; then either call
+ * 'task_push_core_bulk_install/backup' to launch the actual
+ * (asynchronous, one-file-at-a-time) operation, or
+ * 'core_bulk_*_cancel_pending' to discard it. Only one pending scan
+ * is held at a time - a new scan replaces any previous one. */
+
+/* Scans the top level of 'saf_tree' (a raw SAF tree identifier, as
+ * received from Java's safTreeAdded()) for core files not already
+ * present, tagging which ones would overwrite an already-installed
+ * core of the same name. Returns the number of matching files found. */
+size_t core_bulk_install_scan(const char *saf_tree, const char *dir_libretro);
+size_t core_bulk_install_pending_count(void);
+size_t core_bulk_install_pending_overwrite_count(void);
+const char *core_bulk_install_pending_filename(size_t idx);
+bool core_bulk_install_pending_is_overwrite(size_t idx);
+void core_bulk_install_cancel_pending(void);
+bool task_push_core_bulk_install(void);
+
+/* Scans 'dir_libretro' (always the private core directory - never
+ * user-selectable) for installed cores to copy into 'saf_dest_tree'
+ * (a raw SAF tree identifier for the user-chosen destination). */
+size_t core_bulk_backup_scan(const char *dir_libretro, const char *saf_dest_tree);
+size_t core_bulk_backup_pending_count(void);
+uint64_t core_bulk_backup_pending_total_size(void);
+const char *core_bulk_backup_pending_filename(size_t idx);
+void core_bulk_backup_cancel_pending(void);
+bool task_push_core_bulk_backup(void);
+#endif
 
 bool task_push_pl_manager_reset_cores(const playlist_config_t *playlist_config);
 bool task_push_pl_manager_clean_playlist(const playlist_config_t *playlist_config);

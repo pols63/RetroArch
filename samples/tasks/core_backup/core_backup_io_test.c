@@ -742,7 +742,7 @@ static void test_restore_round_trip(void)
    g_clock_step = 0;
 
    task_queue_init(false, NULL);
-   if (!task_push_core_restore(g_last_backup, g_tmpdir, &core_loaded))
+   if (!task_push_core_restore(g_last_backup, g_tmpdir, &core_loaded, NULL))
    {
       char cp[1024];
       enum core_backup_type bt = core_backup_get_core_path(g_last_backup,
