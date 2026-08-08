@@ -242,6 +242,14 @@ size_t core_bulk_install_pending_count(void);
 size_t core_bulk_install_pending_overwrite_count(void);
 const char *core_bulk_install_pending_filename(size_t idx);
 bool core_bulk_install_pending_is_overwrite(size_t idx);
+/* True if the scanned folder also contained an "info.zip"
+ * (FILE_PATH_CORE_INFO_ZIP) - task_push_core_bulk_install() extracts it
+ * into the core info directory the same way the online "Update Core
+ * Info Files" updater would, as an offline equivalent of that
+ * download. Callers should treat a folder with only an info.zip and no
+ * core files as valid (do not gate on core_bulk_install_pending_count()
+ * alone). */
+bool core_bulk_install_pending_has_info_zip(void);
 void core_bulk_install_cancel_pending(void);
 bool task_push_core_bulk_install(void);
 

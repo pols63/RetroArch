@@ -31,9 +31,12 @@
 #include <string/stdstring.h>
 #include <file/file_path.h>
 
+#include "../command.h"
+#include "../configuration.h"
 #include "../retroarch.h"
 #include "../runloop.h"
 #include "../verbosity.h"
+#include "../file_path_special.h"
 #include "tasks_internal.h"
 
 #if defined(ANDROID) && defined(HAVE_SAF)
@@ -56,16 +59,22 @@ typedef struct
  * task_push_core_bulk_install). Only one scan/operation is supported
  * at a time - a second scan replaces the first, matching the "single
  * batch confirmation" requirement (no concurrent bulk operations). */
-static core_bulk_install_entry_t *core_bulk_install_pending        = NULL;
-static size_t                     core_bulk_install_pending_size   = 0;
-static size_t                     core_bulk_install_overwrite_size = 0;
-static char                      *core_bulk_install_pending_dir    = NULL;
-static bool                       core_bulk_install_task_active    = false;
+static core_bulk_install_entry_t *core_bulk_install_pending          = NULL;
+static size_t                     core_bulk_install_pending_size     = 0;
+static size_t                     core_bulk_install_overwrite_size   = 0;
+static char                      *core_bulk_install_pending_dir      = NULL;
+/* Full "saf://tree/..." path of an "info.zip" found alongside the core
+ * files in the scanned folder, or NULL if none was present. See the
+ * CORE_BULK_INSTALL_INFO_ZIP state below. */
+static char                      *core_bulk_install_pending_info_zip = NULL;
+static bool                       core_bulk_install_task_active      = false;
 
 enum core_bulk_install_status
 {
    CORE_BULK_INSTALL_NEXT = 0,
    CORE_BULK_INSTALL_WAIT,
+   CORE_BULK_INSTALL_INFO_ZIP,
+   CORE_BULK_INSTALL_INFO_ZIP_WAIT,
    CORE_BULK_INSTALL_SUMMARY,
    CORE_BULK_INSTALL_END
 };
@@ -81,6 +90,11 @@ typedef struct
    char *failed_names;
    size_t failed_names_len;
    size_t failed_names_cap;
+   /* Owns the "saf://..." path of a pending "info.zip", if any -
+    * handed over from core_bulk_install_pending_info_zip at push time,
+    * same as 'entries' is handed over from core_bulk_install_pending. */
+   char *info_zip_saf_path;
+   bool info_zip_updated;
    enum core_bulk_install_status status;
 } core_bulk_install_handle_t;
 
@@ -113,6 +127,9 @@ static void core_bulk_install_pending_clear(void)
 
    free(core_bulk_install_pending_dir);
    core_bulk_install_pending_dir    = NULL;
+
+   free(core_bulk_install_pending_info_zip);
+   core_bulk_install_pending_info_zip = NULL;
 }
 
 size_t core_bulk_install_scan(const char *saf_tree, const char *dir_libretro)
@@ -146,6 +163,18 @@ size_t core_bulk_install_scan(const char *saf_tree, const char *dir_libretro)
       if (retro_dirent_is_dir(rdir, NULL))
          continue;
 
+      /* "info.zip" alongside the core files: same name the online
+       * "Update Core Info Files" updater downloads (FILE_PATH_CORE_INFO_ZIP,
+       * file_path_special.h). Not a core file, so it is not added to
+       * core_bulk_install_pending - it is installed separately, see
+       * CORE_BULK_INSTALL_INFO_ZIP in task_core_bulk_install_handler(). */
+      if (string_is_equal_noncase(name, FILE_PATH_CORE_INFO_ZIP))
+      {
+         free(core_bulk_install_pending_info_zip);
+         core_bulk_install_pending_info_zip = retro_vfs_path_join_saf(saf_tree, name);
+         continue;
+      }
+
       if (!core_bulk_filename_is_core(name))
          continue;
 
@@ -177,10 +206,16 @@ size_t core_bulk_install_scan(const char *saf_tree, const char *dir_libretro)
 
    retro_closedir(rdir);
 
-   RARCH_LOG("[Core Bulk Install] Scanned SAF folder: %u core file(s) found, %u would overwrite an installed core.\n",
-         (unsigned)core_bulk_install_pending_size, (unsigned)core_bulk_install_overwrite_size);
+   RARCH_LOG("[Core Bulk Install] Scanned SAF folder: %u core file(s) found, %u would overwrite an installed core, info.zip %sfound.\n",
+         (unsigned)core_bulk_install_pending_size, (unsigned)core_bulk_install_overwrite_size,
+         core_bulk_install_pending_info_zip ? "" : "not ");
 
    return core_bulk_install_pending_size;
+}
+
+bool core_bulk_install_pending_has_info_zip(void)
+{
+   return core_bulk_install_pending_info_zip != NULL;
 }
 
 size_t core_bulk_install_pending_count(void)
@@ -267,9 +302,45 @@ static void core_bulk_install_free_handle(core_bulk_install_handle_t *h)
    free(h->entries);
    free(h->dir_libretro);
    free(h->failed_names);
+   free(h->info_zip_saf_path);
    free(h);
 
    core_bulk_install_task_active = false;
+}
+
+/* Finish callback for the "info.zip" -> path_libretro_info decompress
+ * task pushed from CORE_BULK_INSTALL_INFO_ZIP below. Mirrors what
+ * cb_decompressed() (menu/cbs/menu_cbs_ok.c) does for the online
+ * "Update Core Info Files" download in the MENU_ENUM_LABEL_CB_UPDATE_CORE_INFO_FILES
+ * case - forces a core-info rescan so the newly-extracted .info files
+ * are picked up - except it must NOT delete the source file the way
+ * that callback does: there the source is a temp download, here it is
+ * the user's own info.zip on their chosen SAF folder.
+ *
+ * Runs on the main thread (all retro_task_t callbacks do, once the
+ * task is retired), so calling command_event() here - unlike from this
+ * file's own task handler, which runs on the task worker thread - does
+ * not race the core-info list rebuild it triggers. */
+static void cb_core_bulk_install_info_zip(retro_task_t *task,
+      void *task_data, void *user_data, const char *err)
+{
+   decompress_task_data_t *dec = (decompress_task_data_t*)task_data;
+
+   if (dec && !err)
+   {
+      bool refresh = true;
+      command_event(CMD_EVENT_CORE_INFO_INIT, &refresh);
+   }
+
+   if (err)
+      RARCH_ERR("[Core Bulk Install] Failed to extract \"%s\": %s\n",
+            FILE_PATH_CORE_INFO_ZIP, err);
+
+   if (dec)
+   {
+      free(dec->source_file);
+      free(dec);
+   }
 }
 
 static void task_core_bulk_install_handler(retro_task_t *task)
@@ -288,7 +359,7 @@ static void task_core_bulk_install_handler(retro_task_t *task)
 
          if (h->current_index >= h->num_entries)
          {
-            h->status = CORE_BULK_INSTALL_SUMMARY;
+            h->status = CORE_BULK_INSTALL_INFO_ZIP;
             break;
          }
 
@@ -371,6 +442,61 @@ static void task_core_bulk_install_handler(retro_task_t *task)
       }
       break;
 
+      case CORE_BULK_INSTALL_INFO_ZIP:
+      {
+         settings_t *settings;
+         const char *dir_info;
+
+         if (!h->info_zip_saf_path)
+         {
+            h->status = CORE_BULK_INSTALL_SUMMARY;
+            break;
+         }
+
+         settings = config_get_ptr();
+         dir_info = settings->paths.path_libretro_info;
+
+         RARCH_LOG("[Core Bulk Install] Updating core info database from \"%s\"...\n",
+               FILE_PATH_CORE_INFO_ZIP);
+
+         /* Reuses the exact same extraction task the online "Update
+          * Core Info Files" updater pushes for its downloaded
+          * info.zip (menu/cbs/menu_cbs_ok.c, cb_generic_download) -
+          * this is the offline equivalent of that download, so it
+          * runs the same install step rather than reimplementing zip
+          * extraction here. The VFS layer opens "saf://" sources
+          * transparently (same as task_push_core_restore() above),
+          * so the SAF path is passed straight through. */
+         if (   dir_info && *dir_info
+             && task_push_decompress(h->info_zip_saf_path, dir_info,
+                   NULL, NULL, NULL, cb_core_bulk_install_info_zip,
+                   NULL, NULL, true))
+            h->status = CORE_BULK_INSTALL_INFO_ZIP_WAIT;
+         else
+         {
+            RARCH_LOG("[Core Bulk Install] Failed to start core info database update.\n");
+            h->status = CORE_BULK_INSTALL_SUMMARY;
+         }
+      }
+      break;
+
+      case CORE_BULK_INSTALL_INFO_ZIP_WAIT:
+      {
+         /* Same safe polling as CORE_BULK_INSTALL_WAIT above - never
+          * touch the retro_task_t* task_push_decompress() would have
+          * handed back, only ask the queue whether it is still
+          * reachable. */
+         if (task_check_decompress(h->info_zip_saf_path))
+            break;
+
+         /* No longer reachable: fully retired, which - per
+          * cb_core_bulk_install_info_zip() above - means the core
+          * info rescan has already run if extraction succeeded. */
+         h->info_zip_updated = true;
+         h->status           = CORE_BULK_INSTALL_SUMMARY;
+      }
+      break;
+
       case CORE_BULK_INSTALL_SUMMARY:
       {
          char msg[512];
@@ -384,6 +510,13 @@ static void task_core_bulk_install_handler(retro_task_t *task)
             _len += strlcpy(msg + _len, h->failed_names, sizeof(msg) - _len);
             _len += strlcpy(msg + _len, ")", sizeof(msg) - _len);
          }
+
+         if (h->info_zip_saf_path && _len < sizeof(msg))
+            _len += strlcpy(msg + _len,
+                  h->info_zip_updated
+                        ? "; core info database updated"
+                        : "; core info database update failed",
+                  sizeof(msg) - _len);
 
          runloop_msg_queue_push(msg, _len, 1, 180, true, NULL,
                MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
@@ -412,7 +545,8 @@ bool task_push_core_bulk_install(void)
    retro_task_t *task            = NULL;
    core_bulk_install_handle_t *h = NULL;
 
-   if (core_bulk_install_task_active || core_bulk_install_pending_size == 0)
+   if (   core_bulk_install_task_active
+       || (core_bulk_install_pending_size == 0 && !core_bulk_install_pending_info_zip))
       return false;
 
    if (!(h = (core_bulk_install_handle_t*)calloc(1, sizeof(*h))))
@@ -425,14 +559,16 @@ bool task_push_core_bulk_install(void)
    }
 
    /* Hand ownership of the pending scan over to the task */
-   h->entries      = core_bulk_install_pending;
-   h->num_entries  = core_bulk_install_pending_size;
-   h->dir_libretro = core_bulk_install_pending_dir;
+   h->entries           = core_bulk_install_pending;
+   h->num_entries       = core_bulk_install_pending_size;
+   h->dir_libretro      = core_bulk_install_pending_dir;
+   h->info_zip_saf_path = core_bulk_install_pending_info_zip;
 
-   core_bulk_install_pending        = NULL;
-   core_bulk_install_pending_size   = 0;
-   core_bulk_install_overwrite_size = 0;
-   core_bulk_install_pending_dir    = NULL;
+   core_bulk_install_pending          = NULL;
+   core_bulk_install_pending_size     = 0;
+   core_bulk_install_overwrite_size   = 0;
+   core_bulk_install_pending_dir      = NULL;
+   core_bulk_install_pending_info_zip = NULL;
 
    task->handler     = task_core_bulk_install_handler;
    task->state       = h;

@@ -1274,21 +1274,35 @@ static unsigned menu_displaylist_parse_core_bulk_install_confirm_list(file_list_
    unsigned count        = 0;
    size_t num_pending    = core_bulk_install_pending_count();
    size_t num_overwrite  = core_bulk_install_pending_overwrite_count();
+   bool has_info_zip     = core_bulk_install_pending_has_info_zip();
    size_t i;
    char header[256];
 
-   if (num_pending == 0)
+   /* A folder with only an "info.zip" and no core files is still a
+    * valid batch (see core_bulk_install_pending_has_info_zip()) */
+   if (num_pending == 0 && !has_info_zip)
       return 0;
 
-   snprintf(header, sizeof(header),
-         "%u core file(s) found - %u will overwrite an installed core",
-         (unsigned)num_pending, (unsigned)num_overwrite);
+   if (num_pending > 0)
+      snprintf(header, sizeof(header),
+            "%u core file(s) found - %u will overwrite an installed core",
+            (unsigned)num_pending, (unsigned)num_overwrite);
+   else
+      snprintf(header, sizeof(header), "No core files found");
 
    if (menu_entries_append(list, header,
          MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST_STR,
          MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST,
          0, 0, 0, NULL))
       count++;
+
+   if (has_info_zip)
+      if (menu_entries_append(list,
+            "info.zip found - core info database will be updated",
+            MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST_STR,
+            MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST,
+            0, 0, 0, NULL))
+         count++;
 
    for (i = 0; i < num_pending; i++)
    {

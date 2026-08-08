@@ -737,7 +737,8 @@ JNIEXPORT void JNICALL Java_com_retroarch_browser_retroactivity_RetroActivityCom
          settings_t *settings     = config_get_ptr();
          const char *dir_libretro = settings->paths.directory_libretro;
 
-         if (core_bulk_install_scan(tree, dir_libretro) > 0)
+         if (   core_bulk_install_scan(tree, dir_libretro) > 0
+             || core_bulk_install_pending_has_info_zip())
             generic_action_ok_displaylist_push(
                   msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_SAF),
                   NULL,

@@ -284,6 +284,80 @@ para cualquier operación con metacaracteres, mejor varios comandos
 sin `&&`, sin glob remoto (expandir el glob en el lado local/Bash y pasar
 la lista de nombres ya expandida).
 
+## info.zip en bulk-install/backup (offline core-info database)
+
+A pedido explícito del usuario, tras resolver el crash y el hallazgo de
+"License: N/A" (ver secciones de arriba): la instalación/backup masivos
+ahora también manejan la base de datos de core-info (`info.zip`), para
+que el ciclo completo funcione offline: Backup Cores (con red) →
+`info.zip` queda junto a los `.so` respaldados → más adelante, sin red,
+Install Cores from Folder (Bulk) detecta ese mismo `info.zip` en la
+carpeta y lo instala igual que si lo hubiera descargado el "Update Core
+Info Files" del Online Updater.
+
+**Implementado (compilado, sin probar en dispositivo todavía la parte
+nueva — sí se confirmó que la app sigue arrancando sin crash):**
+
+- `tasks/task_core_bulk_install.c`: el escaneo (`core_bulk_install_scan`)
+  ahora también detecta un archivo llamado exactamente `info.zip`
+  (`FILE_PATH_CORE_INFO_ZIP`, `file_path_special.h`) en la carpeta SAF
+  elegida. Si aparece, tras instalar todos los cores el handler agrega
+  dos estados nuevos (`CORE_BULK_INSTALL_INFO_ZIP` /
+  `_INFO_ZIP_WAIT`) que reusan `task_push_decompress()` — la MISMA tarea
+  que usa el actualizador online (`cb_generic_download` en
+  `menu/cbs/menu_cbs_ok.c`) para extraer su `info.zip` descargado — hacia
+  `path_libretro_info`, y esperan con el mismo patrón seguro de
+  `task_queue_find()` (no polling de un puntero de tarea retenido) ya
+  usado para los cores. El callback propio (`cb_core_bulk_install_info_zip`)
+  dispara `CMD_EVENT_CORE_INFO_INIT` en el hilo principal al terminar —
+  a diferencia del callback online (`cb_decompressed`), NO borra el
+  archivo fuente (es el `info.zip` del usuario en su carpeta SAF, no una
+  descarga temporal). Una carpeta con SOLO `info.zip` (sin cores) ahora
+  es un batch válido — se ajustó el guard en
+  `frontend/drivers/platform_unix.c` (`safTreeAdded`) y el bail-out en
+  `menu/menu_displaylist.c` (antes devolvía 0 filas y la pantalla de
+  confirmación quedaba vacía/sin "Install All" si no había cores).
+- `tasks/task_core_bulk_backup.c`: nuevo escritor de ZIP mínimo, propio
+  (no hay ningún escritor de zip reutilizable en el repo — solo lectores,
+  usados para instalar cores/assets). Solo entradas STORED (sin
+  compresión): cada `.info` se lee entero a memoria primero (son pocos
+  KB), así el CRC-32 (`encoding_crc32`, `encodings/crc32.h`) y el tamaño
+  ya se conocen al escribir el header local — cero necesidad de
+  "seekear" hacia atrás para parchear nada, todo el archivo se escribe
+  estrictamente hacia adelante, directo al stream SAF de destino (mismo
+  patrón `intfstream_open_file(..., WRITE)` que ya usa la copia de cores
+  de este archivo). Nuevo estado `CORE_BULK_BACKUP_INFO_ZIP` entre el
+  loop de copia y el resumen; falla de forma no bloqueante (si
+  `path_libretro_info` no tiene `.info` o falla la escritura, el backup
+  de cores en sí no se ve afectado, solo queda sin `info.zip`).
+- **Hardening de paso, mismo bug que el crash de la sesión anterior**:
+  `task_decompress_finder()` (`tasks/task_decompress.c`) tenía el MISMO
+  patrón de UAF que `task_core_backup_finder()` (lee `task->state` sin
+  comprobar `RETRO_TASK_FLG_FINISHED` primero) — se corrigió igual,
+  proactivamente, antes de que el nuevo código de instalación de
+  `info.zip` lo hiciera pisar la misma mina.
+- `tasks/task_core_backup.c` / `tasks/task_core_bulk_install.c`: para
+  evitar la MISMA clase de bug de threading que causó el crash original
+  (`core_info_find()` sin lock desde el hilo worker), se agregó un
+  parámetro `core_display_name` a `task_push_core_restore()` — si el
+  llamador lo pasa no-vacío, salta el lookup de `core_info_find()` (y el
+  de `core_info_get_core_lock()` con `validate_path=true`). El bulk
+  installer pasa el nombre de archivo tal cual (suficiente para el
+  título/log transitorio de la tarea; el nombre "bonito" real lo toma el
+  menú del rescan de core-info una vez que corre).
+
+**Pendiente para la próxima sesión**: probar en dispositivo el ciclo
+completo — Backup Cores (con `.info` ya presentes, ver sección de
+arriba) → confirmar que aparece `info.zip` junto a los `.so`
+respaldados en la carpeta SAF elegida, abrirlo con cualquier
+descompresor para confirmar que es un zip válido → luego Install Cores
+from Folder (Bulk) apuntando a esa misma carpeta (o una con cores +
+ese `info.zip`) → confirmar el mensaje final "core info database
+updated" y que "Manage Cores" ya muestra nombre/licencia sin pasos
+manuales. También probar el caso "carpeta con SOLO info.zip, sin
+cores" (pantalla de confirmación con 0 archivos listados pero con la
+fila informativa y el bulk sigue mostrando su bulk-install).
+
 ## Próximos pasos (en orden)
 
 1. Decidir si commitear los cambios de la sección "Trabajo hecho en esta

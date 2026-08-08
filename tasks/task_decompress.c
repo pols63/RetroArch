@@ -346,10 +346,23 @@ static void task_decompress_handler_subdir(retro_task_t *task)
 static bool task_decompress_finder(
       retro_task_t *task, void *user_data)
 {
-   decompress_state_t *dec = (decompress_state_t*)task->state;
+   decompress_state_t *dec;
+
    if (task->handler != task_decompress_handler)
       return false;
-   return !strcmp(dec->source_file, (const char*)user_data);
+
+   /* A finished task may already have a dangling task->state:
+    * task_decompress_handler_finished() frees dec->source_file (in
+    * the error path) as soon as it flags the task finished, well
+    * before the retro_task_t itself is retired and unlinked from
+    * the queues this finder is walked from (task_queue_find()).
+    * Skip it before dereferencing task->state - see the identical
+    * fix in tasks/task_core_backup.c's task_core_backup_finder(). */
+   if (task_get_flags(task) & RETRO_TASK_FLG_FINISHED)
+      return false;
+
+   dec = (decompress_state_t*)task->state;
+   return dec && !strcmp(dec->source_file, (const char*)user_data);
 }
 
 bool task_check_decompress(const char *source_file)
