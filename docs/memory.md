@@ -402,8 +402,70 @@ cómo agruparlos en commits.
 2. Puntos de riesgo restantes, sin verificar todavía (ver también sección
    4 de `docs/retroarch-android-bulk-cores-testing.md`):
    - Comportamiento con una carpeta vacía (ni cores ni info.zip).
-   - Cancelar y reintentar (segundo scan) sin dejar estado colgado.
    - El detalle de fallidos en el resumen final cuando hay archivos
      rechazados (core bloqueado, archivo inválido, etc.).
    - Los drivers de menú no probados explícitamente (XMB/Ozone/MaterialUI
      — confirmar cuál se usó en las pruebas y extender si hace falta).
+
+## Segundo bug de bulk-install: reintentar sobre cores ya instalados colgaba y crasheaba (encontrado y arreglado)
+
+El punto de riesgo "cancelar y reintentar (segundo scan) sin dejar estado
+colgado" de la lista de arriba **sí era un bug real**, encontrado por el
+usuario al repetir "Install Cores from Folder (Bulk)" sobre una carpeta
+cuyos cores ya estaban instalados: la app se quedaba en "0%" para siempre
+y terminaba cerrándose sola.
+
+**Causa raíz** (`tasks/task_core_backup.c`, caso `CORE_RESTORE_GET_CORE_CRC`
+de `task_core_restore_handler()`): cuando el core de destino YA existe (solo
+pasa en un reinstall/overwrite - un install nuevo no entra a esta rama),
+el handler calcula el CRC del archivo existente en ticks acotados por
+tiempo (mismo patrón que `CORE_BACKUP_CHECK_CRC`). Pero a diferencia de ese
+caso hermano, el `intfstream_open_file()` estaba FUERA del `if
+(!crc_active)` — se re-ejecutaba en cada tick mientras el hash no
+terminara, no solo en el primero. Cada reapertura: (a) reinicia la lectura
+en el offset 0, así que el hash nunca avanza más allá de lo que cabe en un
+solo tick — nunca llega a EOF en un archivo más grande que ese
+presupuesto, de ahí el "0% eterno"; (b) pisa el puntero anterior sin
+cerrarlo, filtrando un file descriptor por tick — de ahí el crash final
+(agotamiento de FDs). Fix: mover la apertura adentro del `if
+(!crc_active)`, igual que ya hacía `CORE_BACKUP_CHECK_CRC` y la rama
+hermana `CORE_RESTORE_GET_BACKUP_CRC` un poco más abajo en el mismo
+archivo (que sí lo hacía bien — este bug era exclusivo de
+`CORE_RESTORE_GET_CORE_CRC`).
+
+No probado todavía en dispositivo tras el fix (aplicado por Claude fuera de
+sesión de testing activa) — **pendiente confirmar en la próxima sesión**
+repitiendo exactamente el escenario que lo disparó (bulk install dos veces
+seguidas sobre la misma carpeta).
+
+## Ajuste de UI: mensajes de progreso superpuestos durante bulk install (arreglado, no probado en dispositivo)
+
+El usuario también reportó que, incluso sin el bug de arriba, "Install
+Cores from Folder (Bulk)" se sentía como si instalara todo a la vez,
+con texto superpuesto en el toast de progreso — en vez de un único
+progreso "típico de RetroArch" con barra.
+
+Causa: `task_push_core_restore()` (llamado una vez por archivo, en
+secuencia, desde `task_core_bulk_install_handler()`) crea su propio task
+`RETRO_TASK_FLG_ALTERNATIVE_LOOK` con su propio título/progreso — que
+compite por el mismo slot en pantalla con el task contenedor
+("Installing cores...", también `ALTERNATIVE_LOOK`). Con archivos que
+instalan casi instantáneamente, ambos títulos se renderizaban solapados.
+
+Fix: se agregó un parámetro `mute` a `task_push_core_restore()` (mismo
+patrón que ya tenía `task_push_core_backup()`) — el bulk installer lo
+llama con `mute=true` para que el task por-archivo nunca muestre su
+propio progreso/toast (`RETRO_TASK_FLG_MUTE`), y en su lugar actualiza el
+título del task contenedor en cada iteración (`"Installing cores...
+(i/N) nombre.so"`) vía `task_set_title()`/`task_free_title()`. Los otros
+4 call sites existentes de `task_push_core_restore()` (menú "Install or
+Restore a Core", `menu_cbs_ok.c` x3, y el test de
+`samples/tasks/core_backup/core_backup_io_test.c`) pasan `mute=false`,
+sin cambio de comportamiento visible ahí.
+
+**No probado en dispositivo todavía** — pendiente confirmar en la próxima
+sesión que se ve una única barra de progreso avanzando "Installing
+cores... (i/N) nombre.so" sin solapamientos, y que el toast final de
+resumen (`"Bulk core install: X installed, Y failed"`) sigue apareciendo
+normalmente (no está mute, usa `runloop_msg_queue_push` directo, no pasa
+por el flag del task).

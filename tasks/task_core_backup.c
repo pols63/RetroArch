@@ -886,29 +886,35 @@ static void task_core_restore_handler(retro_task_t *task)
           * CRC value */
          if (path_is_valid(backup_handle->core_path))
          {
-            /* Open core file for reading */
-            backup_handle->core_file = intfstream_open_file(
-                  backup_handle->core_path, RETRO_VFS_FILE_ACCESS_READ,
-                  RETRO_VFS_FILE_ACCESS_HINT_NONE);
-
-            if (!backup_handle->core_file)
-            {
-               RARCH_ERR("[Core Restore] Failed to open core file: \"%s\".\n",
-                     backup_handle->core_path);
-               task_free_error(task);
-               task_set_error(task, strdup("Failed to open core file."));
-               backup_handle->status = CORE_RESTORE_END;
-               break;
-            }
-
             /* Get CRC value, a bounded slice per tick; see the
-             * matching comment in CORE_BACKUP_CHECK_CRC. */
+             * matching comment in CORE_BACKUP_CHECK_CRC. The core
+             * file must only be opened once, on the first tick -
+             * re-opening it on every tick (as this used to do
+             * unconditionally, ahead of this block) restarts the
+             * hash from offset 0 each time, so it never reaches EOF
+             * on a file bigger than one tick's budget, and leaks the
+             * previous intfstream handle every tick until the
+             * process runs out of file descriptors. */
             {
                int64_t hashed;
                retro_time_t crc_deadline;
 
                if (!backup_handle->crc_active)
                {
+                  backup_handle->core_file = intfstream_open_file(
+                        backup_handle->core_path, RETRO_VFS_FILE_ACCESS_READ,
+                        RETRO_VFS_FILE_ACCESS_HINT_NONE);
+
+                  if (!backup_handle->core_file)
+                  {
+                     RARCH_ERR("[Core Restore] Failed to open core file: \"%s\".\n",
+                           backup_handle->core_path);
+                     task_free_error(task);
+                     task_set_error(task, strdup("Failed to open core file."));
+                     backup_handle->status = CORE_RESTORE_END;
+                     break;
+                  }
+
                   backup_handle->crc_accumulator = 0;
                   backup_handle->crc_active      = true;
                   intfstream_rewind(backup_handle->core_file);
@@ -1304,7 +1310,7 @@ task_finished:
 
 bool task_push_core_restore(const char *backup_path, const char *dir_libretro,
       const char *core_display_name,
-      bool *core_loaded, retro_task_t **out_task)
+      bool *core_loaded, retro_task_t **out_task, bool mute)
 {
    size_t _len;
    task_finder_data_t find_data;
@@ -1460,6 +1466,11 @@ bool task_push_core_restore(const char *backup_path, const char *dir_libretro,
    task->progress_cb      = task_window_progress_cb;
    task->callback         = cb_task_core_restore;
    task->flags           |= RETRO_TASK_FLG_ALTERNATIVE_LOOK;
+
+   if (mute)
+      task->flags        |=  RETRO_TASK_FLG_MUTE;
+   else
+      task->flags        &= ~RETRO_TASK_FLG_MUTE;
 
    /* If core to be restored is currently loaded, must
     * unload it before pushing the task */

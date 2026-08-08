@@ -356,6 +356,7 @@ static void task_core_bulk_install_handler(retro_task_t *task)
       {
          const core_bulk_install_entry_t *entry;
          bool core_loaded  = false;
+         char task_title[128];
 
          if (h->current_index >= h->num_entries)
          {
@@ -366,6 +367,19 @@ static void task_core_bulk_install_handler(retro_task_t *task)
          entry = &h->entries[h->current_index];
 
          RARCH_LOG("[Core Bulk Install] Installing \"%s\"...\n", entry->filename);
+
+         /* Single on-screen progress display for the whole batch:
+          * the per-file restore task below is pushed muted
+          * (RETRO_TASK_FLG_MUTE) so its own progress/toast never
+          * shows, and this task's title is updated here instead -
+          * otherwise both this task and the per-file restore task
+          * are ALTERNATIVE_LOOK tasks progressing at the same time,
+          * and their titles fight over the same on-screen slot. */
+         task_free_title(task);
+         snprintf(task_title, sizeof(task_title), "Installing cores... (%u/%u) %s",
+               (unsigned)(h->current_index + 1), (unsigned)h->num_entries,
+               entry->filename);
+         task_set_title(task, strdup(task_title));
 
          /* Passing the filename as 'core_display_name' keeps
           * task_push_core_restore() from calling core_info_find():
@@ -379,7 +393,7 @@ static void task_core_bulk_install_handler(retro_task_t *task)
           * picks up the proper display name once core info is
           * (re-)scanned. */
          if (task_push_core_restore(entry->saf_path, h->dir_libretro,
-                  entry->filename, &core_loaded, NULL))
+                  entry->filename, &core_loaded, NULL, true))
          {
             h->status = CORE_BULK_INSTALL_WAIT;
          }

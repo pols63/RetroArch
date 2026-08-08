@@ -206,12 +206,19 @@ void *task_push_core_backup(
  * that is rebuilt with no locking whenever CMD_EVENT_CORE_INFO_INIT
  * runs on the main thread - including from this function's own
  * finish callback for a *previous* restore, which is exactly the
- * situation a bulk-install coordinator creates. */
+ * situation a bulk-install coordinator creates.
+ * NOTE 4: 'mute' suppresses this task's own on-screen progress/toast
+ * (RETRO_TASK_FLG_MUTE) - for a caller driving its own combined
+ * progress display across several restores (e.g. a bulk-install
+ * coordinator), muting each individual restore avoids two
+ * ALTERNATIVE_LOOK progress messages (the coordinator's and this
+ * task's) fighting over the same on-screen slot. */
 bool task_push_core_restore(const char *backup_path,
       const char *dir_libretro,
       const char *core_display_name,
       bool *core_loaded,
-      retro_task_t **out_task);
+      retro_task_t **out_task,
+      bool mute);
 
 /* Thread-safe alternative to polling RETRO_TASK_FLG_FINISHED on the
  * retro_task_t* returned via 'out_task' above: reports whether a

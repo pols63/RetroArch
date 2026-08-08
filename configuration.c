@@ -788,6 +788,8 @@ static const enum location_driver_enum LOCATION_DEFAULT_DRIVER = LOCATION_NULL;
 static const enum menu_driver_enum MENU_DEFAULT_DRIVER = MENU_RGUI;
 #elif defined(IOS) && !TARGET_OS_TV
 #define MENU_DEFAULT_DRIVER (ios_running_on_ipad() ? MENU_OZONE : MENU_MATERIALUI)
+#elif defined(ANDROID) && defined(HAVE_OZONE)
+static const enum menu_driver_enum MENU_DEFAULT_DRIVER = MENU_OZONE;
 #elif defined(HAVE_MATERIALUI) && defined(RARCH_MOBILE)
 static const enum menu_driver_enum MENU_DEFAULT_DRIVER = MENU_MATERIALUI;
 #elif defined(HAVE_OZONE)

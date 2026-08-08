@@ -586,11 +586,9 @@ const char* frontend_driver_get_cpu_model_name(void)
 
 enum retro_language frontend_driver_get_user_language(void)
 {
-   frontend_state_t *frontend_st   = &frontend_driver_st;
-   frontend_ctx_driver_t *frontend = frontend_st->current_frontend_ctx;
-   if (frontend && frontend->get_user_language)
-      return frontend->get_user_language();
-   return RETRO_LANGUAGE_ENGLISH;
+   /* This fork always defaults to Spanish, regardless of the
+    * OS/device language, instead of querying the platform driver. */
+   return RETRO_LANGUAGE_SPANISH;
 }
 
 bool frontend_driver_has_gamemode(void)
