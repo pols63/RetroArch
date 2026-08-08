@@ -1,5 +1,17 @@
 # Instructivo: Instalación y Backup Masivo de Cores en RetroArch Android (fork personal)
 
+> **Nota post-implementación** (ver `docs/memory.md` para el detalle
+> completo y actualizado): la implementación real terminó siendo 100%
+> nativa en C, reutilizando el puente SAF ya existente en el fork, en vez
+> del enfoque Kotlin/`DocumentFile` que describen las Fases 1 y 2 de este
+> documento — se mantienen como referencia histórica del diseño original,
+> no como el código real. Además, ya confirmado funcionando en
+> dispositivo, se extendió el alcance para también detectar/instalar y
+> generar un `info.zip` (base de datos de core-info de RetroArch) en
+> ambos flujos, permitiendo un ciclo de backup/restore totalmente
+> offline. `docs/memory.md` es la fuente de verdad sobre el estado actual
+> del código; este documento queda como el pedido original.
+
 ## Contexto y objetivo
 
 RetroArch para Android restringe el acceso directo a su carpeta privada de cores

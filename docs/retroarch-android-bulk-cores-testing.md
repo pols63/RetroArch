@@ -1,9 +1,17 @@
 # Cómo probar: instalación masiva y backup de cores (Android, SAF)
 
 Guía práctica para compilar y probar en dispositivo la implementación descrita
-en `docs/retroarch-android-bulk-cores.md`. Nada de este código pudo
-compilarse ni probarse durante la implementación (no hay NDK/Gradle en ese
-entorno), así que este es el primer punto de validación real.
+en `docs/retroarch-android-bulk-cores.md`.
+
+**Estado: verificado en dispositivo real.** El flujo completo — bulk
+install, bulk backup, y la extensión de `info.zip` (offline core-info
+database, ver `docs/memory.md`) — se probó de punta a punta y el usuario lo
+confirmó funcionando. Esta guía ya no es especulativa; las secciones 3 y 4
+reflejan lo que efectivamente se verificó, no una lista de riesgos sin
+probar. Para el detalle de los bugs encontrados y corregidos en el camino
+(un crash de use-after-free reproducible al 100%, diagnosticado con
+`adb logcat -b crash` + `llvm-addr2line` contra el `.so` sin stripear), ver
+`docs/memory.md` — esta guía se queda solo con los pasos prácticos.
 
 ## 1. Prerrequisitos
 
@@ -113,6 +121,9 @@ adb install -r pkg/android/phoenix/build/outputs/apk/aarch64/debug/phoenix-aarch
    - Confirmar la lista (con tamaño total aproximado).
    - Verificar con un explorador de archivos que los `.so` aparezcan
      copiados en esa carpeta.
+   - Si `path_libretro_info` tiene archivos `.info` instalados (ver punto
+     5), debería aparecer también un `info.zip` junto a los `.so` — un zip
+     STORED (sin comprimir) válido, abrible con cualquier descompresor.
 
 4. Revisar logs con logcat filtrando por los tags agregados:
    ```bash
@@ -120,22 +131,44 @@ adb install -r pkg/android/phoenix/build/outputs/apk/aarch64/debug/phoenix-aarch
    ```
    Debería haber una línea por archivo procesado, con su resultado.
 
-## 4. Puntos a vigilar de cerca
+5. **Offline core-info database (info.zip)**: ver `docs/memory.md` para el
+   detalle completo. Resumen del ciclo:
+   - Colocar (o dejar que "Backup Cores" genere, punto 3) un `info.zip` en
+     la misma carpeta SAF que se usa para "Install Cores from Folder
+     (Bulk)".
+   - La pantalla de confirmación debe mostrar la fila "info.zip found -
+     core info database will be updated" (además de la lista de cores, o
+     sola si la carpeta no tiene cores, solo `info.zip`).
+   - Tras "Install All", el toast final debe incluir "; core info database
+     updated", y "Manage Cores" debe mostrar nombre real y licencia de cada
+     core (no "License: N/A") sin ningún paso manual adicional.
 
-Sin haber podido compilar ni probar visualmente, estos son los puntos de
-mayor riesgo a revisar primero:
+## 4. Puntos verificados / a vigilar
 
-- Que la pantalla de confirmación efectivamente liste los archivos y no
-  rompa el renderizado del driver de menú en uso (XMB/Ozone/MaterialUI) — se
-  usó el mecanismo genérico de listas de RetroArch, pero no se verificó
-  visualmente en ningún driver.
-- El comportamiento con una carpeta vacía o sin cores: debería mostrar el
-  toast "No core files found in that folder." (instalación) o "No installed
-  cores found to back up." (backup) en vez de abrir una pantalla vacía.
+Ya verificado en dispositivo real (Android 13, `aarch64Debug`):
+
+- La pantalla de confirmación lista los archivos correctamente y no rompe
+  el renderizado del driver de menú en uso.
+- El toast de resumen final aparece con el conteo correcto, tanto para
+  bulk install como para bulk backup.
+- El ciclo completo de `info.zip` (backup → instalación offline → Manage
+  Cores con nombre/licencia correctos) funciona de punta a punta.
+- La app no crashea durante una instalación masiva de varios cores
+  seguidos (bug de use-after-free encontrado y corregido — ver
+  `docs/memory.md`).
+
+Pendiente de verificar / puntos de riesgo restantes:
+
+- El comportamiento con una carpeta vacía o sin cores ni info.zip: debería
+  mostrar el toast "No core files found in that folder." (instalación) o
+  "No installed cores found to back up." (backup) en vez de abrir una
+  pantalla vacía.
 - Que cancelar y volver a intentar (un segundo scan) no deje estado colgado
   entre operaciones.
 - El detalle de fallidos en el resumen final cuando hay archivos rechazados
   (nombre de core bloqueado, archivo inválido, etc.).
+- Los otros drivers de menú además del probado (XMB/Ozone/MaterialUI —
+  confirmar en cuál se probó y extender a los demás si hace falta).
 
 ## 5. Si algo falla
 
@@ -167,3 +200,37 @@ compilando.
 4. En **SDK Tools**, confirmar que el NDK `29.0.14206865` sigue instalado
    (tildarlo de nuevo si hizo falta reinstalar el SDK).
 5. `File → Sync Project with Gradle Files` y volver a compilar.
+
+### Compilar desde terminal (sin Android Studio abierto): falta `JAVA_HOME`
+
+Si se corre `./gradlew` directo desde una terminal que no heredó el entorno
+de Android Studio, falla con `ERROR: JAVA_HOME is not set and no 'java'
+command could be found in your PATH`. Android Studio trae su propio JDK
+embebido (JBR) que sirve perfectamente para esto — no hace falta instalar
+uno aparte:
+
+```bash
+JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew assembleAarch64Debug
+```
+
+(ajustar la ruta si Android Studio está instalado en otro lado).
+
+### `adb shell run-as <paquete> sh -c "..."` da resultados sin sentido
+
+Con `adb.exe` en Windows, invocado desde una terminal tipo Git Bash/MSYS,
+pasar un comando compuesto (`&&`, `|`, `*`) dentro de `sh -c "..."` es poco
+fiable: `adb shell` reconcatena todos los argumentos con espacios antes de
+enviarlos al dispositivo, así que las comillas que protegían esos
+metacaracteres en el comando local se pierden, y el shell remoto los
+interpreta sueltos — sin dar un error claro, solo resultados que no
+corresponden a lo que se pidió (por ejemplo, listar el directorio raíz de
+datos de la app en vez del subdirectorio pedido).
+
+**Evitarlo**: para cualquier operación remota con metacaracteres, usar
+varios comandos `adb shell run-as <paquete> <cmd> <args...>` simples, sin
+`sh -c`, sin `|`, sin `&&`, sin glob remoto (expandir el glob del lado
+local/Bash y pasar la lista de nombres ya expandida como argumentos
+separados). Esto sirvió, por ejemplo, para copiar en bloque un directorio
+de archivos `.info` a la carpeta privada de la app vía `run-as` (necesario
+porque `run-as` solo funciona en builds *debuggable*, como esta — no en un
+build de release firmado sin dispositivo rooteado).

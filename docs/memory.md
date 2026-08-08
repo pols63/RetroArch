@@ -295,8 +295,10 @@ Install Cores from Folder (Bulk) detecta ese mismo `info.zip` en la
 carpeta y lo instala igual que si lo hubiera descargado el "Update Core
 Info Files" del Online Updater.
 
-**Implementado (compilado, sin probar en dispositivo todavía la parte
-nueva — sí se confirmó que la app sigue arrancando sin crash):**
+**Estado: confirmado funcionando en dispositivo real.** El usuario probó el
+ciclo completo (backup con `info.zip` generado → bulk install offline desde
+esa misma carpeta → Manage Cores con nombre/licencia correctos) y quedó
+conforme. Sin pendientes de esta parte.
 
 - `tasks/task_core_bulk_install.c`: el escaneo (`core_bulk_install_scan`)
   ahora también detecta un archivo llamado exactamente `info.zip`
@@ -358,25 +360,50 @@ manuales. También probar el caso "carpeta con SOLO info.zip, sin
 cores" (pantalla de confirmación con 0 archivos listados pero con la
 fila informativa y el bulk sigue mostrando su bulk-install).
 
+## Estado general al cierre de esta sesión
+
+La feature de bulk-cores (install + backup + extensión info.zip) está
+**funcionando de punta a punta en dispositivo real y confirmada por el
+usuario**. Todo lo listado como "pendiente de probar" en sesiones
+anteriores de este documento ya se verificó:
+
+- Pantalla de confirmación renderiza bien (driver probado: el que usa el
+  dispositivo de prueba actual — no se probó explícitamente en los otros
+  drivers XMB/Ozone/MaterialUI, ver sección 4 de
+  `docs/retroarch-android-bulk-cores-testing.md`).
+- Bulk install y bulk backup completan sin crash, con toast de resumen
+  correcto.
+- Ciclo completo de `info.zip` (backup → instalación offline → Manage
+  Cores con nombre/licencia reales) confirmado.
+
+Los cambios de esta sesión (fix del crash + parámetro
+`core_display_name` + hardening de `task_decompress_finder` + feature de
+`info.zip` en ambos sentidos) están en el árbol de trabajo, **sin
+commitear todavía** — igual que los cambios de assets/iconos de la sesión
+anterior (ver más abajo). Revisar `git status`/`git diff` antes de decidir
+cómo agruparlos en commits.
+
 ## Próximos pasos (en orden)
 
-1. Decidir si commitear los cambios de la sección "Trabajo hecho en esta
-   sesión: menú sin iconos" (assets bundling + fix de `assets_directory`)
-   — están verificados funcionando pero no forman parte de la feature de
-   bulk-cores en sí.
-3. Con el crash resuelto, probar el flujo manual completo de
-   bulk-install/backup (ver `docs/retroarch-android-bulk-cores-testing.md`,
-   sección 3): verificar instalación/backup real de archivos + toast de
-   resumen + logs (`adb logcat | grep -E "Core Bulk Install|Core Bulk
-   Backup"`).
-4. Puntos de riesgo a vigilar especialmente al probar: que la pantalla de
-   confirmación renderice bien en el driver activo (XMB/Ozone/MaterialUI),
-   comportamiento con carpeta vacía, y que cancelar/reintentar no deje
-   estado colgado.
-5. El detalle de fallidos en el resumen final cuando hay archivos
-   rechazados (nombre de core bloqueado, archivo inválido, etc.) — todavía
-   sin probar.
-6. Backup masivo (`task_core_bulk_backup.c`) no tiene el patrón de
-   subtarea que causó el crash de install (copia los archivos
-   directamente, sin pushear tareas hijas) — no debería estar afecto, pero
-   tampoco se ha probado en dispositivo todavía.
+1. Decidir cómo commitear lo pendiente — hay dos tandas de cambios sin
+   commit, de dos sesiones distintas y sin relación directa entre sí, que
+   probablemente conviene separar:
+   - Sesión anterior: assets bundling + fix de `assets_directory` (menú
+     sin iconos), en `pkg/android/phoenix/build.gradle` y
+     `frontend/drivers/platform_unix.c`.
+   - Esta sesión: fix del crash de bulk-install (UAF en
+     `task_core_backup_finder`/`task_decompress_finder`, parámetro
+     `core_display_name`) + feature de `info.zip`, repartido en
+     `tasks/task_core_backup.c`, `tasks/task_core_bulk_install.c`,
+     `tasks/task_core_bulk_backup.c`, `tasks/task_decompress.c`,
+     `tasks/tasks_internal.h`, `menu/cbs/menu_cbs_ok.c`,
+     `menu/menu_displaylist.c`, `frontend/drivers/platform_unix.c`,
+     `samples/tasks/core_backup/core_backup_io_test.c`.
+2. Puntos de riesgo restantes, sin verificar todavía (ver también sección
+   4 de `docs/retroarch-android-bulk-cores-testing.md`):
+   - Comportamiento con una carpeta vacía (ni cores ni info.zip).
+   - Cancelar y reintentar (segundo scan) sin dejar estado colgado.
+   - El detalle de fallidos en el resumen final cuando hay archivos
+     rechazados (core bloqueado, archivo inválido, etc.).
+   - Los drivers de menú no probados explícitamente (XMB/Ozone/MaterialUI
+     — confirmar cuál se usó en las pruebas y extender si hace falta).
