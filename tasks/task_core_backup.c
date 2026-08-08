@@ -212,6 +212,17 @@ static bool task_core_backup_finder(retro_task_t *task, void *user_data)
    if (!task || !user_data)
       return false;
 
+   /* A finished task may already have a dangling task->state:
+    * task_core_backup_handler()/task_core_restore_handler() free
+    * their handle as soon as they flag themselves finished (see
+    * their 'task_finished' label), which happens well before the
+    * retro_task_t itself is retired and unlinked from the queues
+    * this finder walks. A finished task is not 'in progress'
+    * anyway, which is all this finder is answering, so skip it
+    * before touching task->state. */
+   if (task_get_flags(task) & RETRO_TASK_FLG_FINISHED)
+      return false;
+
    if (   (task->handler != task_core_backup_handler)
        && (task->handler != task_core_restore_handler))
       return false;
