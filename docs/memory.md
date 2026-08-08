@@ -378,28 +378,22 @@ anteriores de este documento ya se verificó:
 
 Los cambios de esta sesión (fix del crash + parámetro
 `core_display_name` + hardening de `task_decompress_finder` + feature de
-`info.zip` en ambos sentidos) están en el árbol de trabajo, **sin
-commitear todavía** — igual que los cambios de assets/iconos de la sesión
-anterior (ver más abajo). Revisar `git status`/`git diff` antes de decidir
-cómo agruparlos en commits.
+`info.zip` en ambos sentidos), y los de assets/iconos de la sesión
+anterior, **ya están commiteados** (`9633d4977d`, `a4ca04dc5a`,
+`1f66ed2626`, `a53b1a2d2f`).
+
+Los dos fixes de la sesión más reciente (bug de "0% eterno" + crash al
+reinstalar sobre cores ya instalados, y superposición de mensajes de
+progreso durante bulk install — ver las dos secciones de más abajo),
+junto con los cambios no relacionados de idioma español / Ozone por
+defecto (`configuration.c`, `frontend/frontend_driver.c`), quedaron
+**confirmados en dispositivo por el usuario y ya commiteados**, todos
+juntos en un solo commit (`a53b1a2d2f`, "correcciones en la instalación
+de cores").
 
 ## Próximos pasos (en orden)
 
-1. Decidir cómo commitear lo pendiente — hay dos tandas de cambios sin
-   commit, de dos sesiones distintas y sin relación directa entre sí, que
-   probablemente conviene separar:
-   - Sesión anterior: assets bundling + fix de `assets_directory` (menú
-     sin iconos), en `pkg/android/phoenix/build.gradle` y
-     `frontend/drivers/platform_unix.c`.
-   - Esta sesión: fix del crash de bulk-install (UAF en
-     `task_core_backup_finder`/`task_decompress_finder`, parámetro
-     `core_display_name`) + feature de `info.zip`, repartido en
-     `tasks/task_core_backup.c`, `tasks/task_core_bulk_install.c`,
-     `tasks/task_core_bulk_backup.c`, `tasks/task_decompress.c`,
-     `tasks/tasks_internal.h`, `menu/cbs/menu_cbs_ok.c`,
-     `menu/menu_displaylist.c`, `frontend/drivers/platform_unix.c`,
-     `samples/tasks/core_backup/core_backup_io_test.c`.
-2. Puntos de riesgo restantes, sin verificar todavía (ver también sección
+1. Puntos de riesgo restantes, sin verificar todavía (ver también sección
    4 de `docs/retroarch-android-bulk-cores-testing.md`):
    - Comportamiento con una carpeta vacía (ni cores ni info.zip).
    - El detalle de fallidos en el resumen final cuando hay archivos
@@ -407,7 +401,7 @@ cómo agruparlos en commits.
    - Los drivers de menú no probados explícitamente (XMB/Ozone/MaterialUI
      — confirmar cuál se usó en las pruebas y extender si hace falta).
 
-## Segundo bug de bulk-install: reintentar sobre cores ya instalados colgaba y crasheaba (encontrado y arreglado)
+## Segundo bug de bulk-install: reintentar sobre cores ya instalados colgaba y crasheaba (encontrado, arreglado y confirmado en dispositivo)
 
 El punto de riesgo "cancelar y reintentar (segundo scan) sin dejar estado
 colgado" de la lista de arriba **sí era un bug real**, encontrado por el
@@ -433,12 +427,16 @@ hermana `CORE_RESTORE_GET_BACKUP_CRC` un poco más abajo en el mismo
 archivo (que sí lo hacía bien — este bug era exclusivo de
 `CORE_RESTORE_GET_CORE_CRC`).
 
-No probado todavía en dispositivo tras el fix (aplicado por Claude fuera de
-sesión de testing activa) — **pendiente confirmar en la próxima sesión**
-repitiendo exactamente el escenario que lo disparó (bulk install dos veces
-seguidas sobre la misma carpeta).
+**Estado: confirmado en dispositivo real.** El usuario repitió "Install
+Cores from Folder (Bulk)" sobre una carpeta con cores ya instalados y
+funcionó de punta a punta, sin quedarse colgado ni cerrarse — y además
+notó que el reinstall corre notablemente más rápido que antes (esperable:
+antes de este fix cada tick tiraba y volvía a abrir el archivo desde cero,
+rehashendo desde el byte 0 en vez de avanzar; ahora el CRC se calcula una
+sola pasada, sin reaperturas ni descriptors filtrados). Sin pendientes de
+esta parte.
 
-## Ajuste de UI: mensajes de progreso superpuestos durante bulk install (arreglado, no probado en dispositivo)
+## Ajuste de UI: mensajes de progreso superpuestos durante bulk install (arreglado y confirmado en dispositivo)
 
 El usuario también reportó que, incluso sin el bug de arriba, "Install
 Cores from Folder (Bulk)" se sentía como si instalara todo a la vez,
@@ -463,9 +461,7 @@ Restore a Core", `menu_cbs_ok.c` x3, y el test de
 `samples/tasks/core_backup/core_backup_io_test.c`) pasan `mute=false`,
 sin cambio de comportamiento visible ahí.
 
-**No probado en dispositivo todavía** — pendiente confirmar en la próxima
-sesión que se ve una única barra de progreso avanzando "Installing
-cores... (i/N) nombre.so" sin solapamientos, y que el toast final de
-resumen (`"Bulk core install: X installed, Y failed"`) sigue apareciendo
-normalmente (no está mute, usa `runloop_msg_queue_push` directo, no pasa
-por el flag del task).
+**Estado: confirmado en dispositivo real.** El usuario confirmó que ahora
+se ve una única barra de progreso avanzando ("Installing cores... (i/N)
+nombre.so") sin mensajes superpuestos, y quedó conforme con el resultado.
+Sin pendientes de esta parte.

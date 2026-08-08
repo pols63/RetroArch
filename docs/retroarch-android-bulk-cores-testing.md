@@ -156,6 +156,15 @@ Ya verificado en dispositivo real (Android 13, `aarch64Debug`):
 - La app no crashea durante una instalación masiva de varios cores
   seguidos (bug de use-after-free encontrado y corregido — ver
   `docs/memory.md`).
+- Repetir "Install Cores from Folder (Bulk)" sobre una carpeta cuyos cores
+  ya están instalados no se cuelga ni crashea (bug de reapertura de
+  archivo en cada tick al calcular el CRC del core existente, corregido —
+  ver `docs/memory.md`; de paso, el reinstall corre notablemente más
+  rápido que antes del fix).
+- El progreso de "Install Cores from Folder (Bulk)" se ve como una única
+  barra avanzando ("Installing cores... (i/N) nombre.so"), sin mensajes
+  superpuestos de cada archivo individual (fix de `mute` en
+  `task_push_core_restore()` — ver `docs/memory.md`).
 
 Pendiente de verificar / puntos de riesgo restantes:
 
@@ -163,8 +172,6 @@ Pendiente de verificar / puntos de riesgo restantes:
   mostrar el toast "No core files found in that folder." (instalación) o
   "No installed cores found to back up." (backup) en vez de abrir una
   pantalla vacía.
-- Que cancelar y volver a intentar (un segundo scan) no deje estado colgado
-  entre operaciones.
 - El detalle de fallidos en el resumen final cuando hay archivos rechazados
   (nombre de core bloqueado, archivo inválido, etc.).
 - Los otros drivers de menú además del probado (XMB/Ozone/MaterialUI —
