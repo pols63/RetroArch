@@ -76,7 +76,6 @@ typedef struct
    core_bulk_install_entry_t *entries;
    size_t num_entries;
    size_t current_index;
-   retro_task_t *current_subtask;
    size_t num_success;
    size_t num_failed;
    char *failed_names;
@@ -286,7 +285,6 @@ static void task_core_bulk_install_handler(retro_task_t *task)
       {
          const core_bulk_install_entry_t *entry;
          bool core_loaded  = false;
-         retro_task_t *sub = NULL;
 
          if (h->current_index >= h->num_entries)
          {
@@ -298,11 +296,21 @@ static void task_core_bulk_install_handler(retro_task_t *task)
 
          RARCH_LOG("[Core Bulk Install] Installing \"%s\"...\n", entry->filename);
 
+         /* Passing the filename as 'core_display_name' keeps
+          * task_push_core_restore() from calling core_info_find():
+          * this handler runs on the task worker thread (not the
+          * main thread), and that call reads global core-info state
+          * that a previous file's finish callback may be
+          * concurrently rebuilding via CMD_EVENT_CORE_INFO_INIT on
+          * the main thread - see the NOTE on the prototype in
+          * tasks_internal.h. The filename is only used for transient
+          * task-title/log/error text here; the menu's own core list
+          * picks up the proper display name once core info is
+          * (re-)scanned. */
          if (task_push_core_restore(entry->saf_path, h->dir_libretro,
-                  &core_loaded, &sub) && sub)
+                  entry->filename, &core_loaded, NULL))
          {
-            h->current_subtask = sub;
-            h->status          = CORE_BULK_INSTALL_WAIT;
+            h->status = CORE_BULK_INSTALL_WAIT;
          }
          else
          {
@@ -321,46 +329,45 @@ static void task_core_bulk_install_handler(retro_task_t *task)
 
       case CORE_BULK_INSTALL_WAIT:
       {
-         uint8_t flg;
+         const core_bulk_install_entry_t *entry = &h->entries[h->current_index];
+         char dest_path[PATH_MAX_LENGTH];
 
-         if (!h->current_subtask)
-         {
-            h->status = CORE_BULK_INSTALL_NEXT;
+         fill_pathname_join_special(dest_path, h->dir_libretro,
+               entry->filename, sizeof(dest_path));
+
+         /* Polling task_queue_find() rather than retaining the
+          * retro_task_t* the restore call handed back: that task can
+          * finish and be retired (callback run, then freed) from the
+          * main thread at any time once it is done, and this handler
+          * runs on the task worker thread - there is no lock that
+          * keeps such a free from racing a direct task_get_flags()
+          * poll on a stashed pointer. task_queue_find() only ever
+          * reports true/false under its own locks, so it is safe to
+          * poll here regardless of which thread retires the task. */
+         if (task_core_backup_find(dest_path))
             break;
-         }
 
-         flg = task_get_flags(h->current_subtask);
-
-         if (flg & RETRO_TASK_FLG_FINISHED)
+         /* No longer reachable via the task queue - it fully
+          * finished and retired. task_push_core_restore() does not
+          * report per-file async success/failure to the caller, so a
+          * completed install is inferred from the destination file
+          * now existing in the private core directory. The native
+          * per-file toast (installed/failed) is still shown by
+          * task_push_core_restore()'s own task regardless. */
+         if (path_is_valid(dest_path))
          {
-            const core_bulk_install_entry_t *entry = &h->entries[h->current_index];
-            char dest_path[PATH_MAX_LENGTH];
-
-            /* task_push_core_restore() does not report per-file
-             * async success/failure to the caller; a completed
-             * install is inferred from the destination file now
-             * existing in the private core directory. The native
-             * per-file toast (installed/failed) is still shown by
-             * task_push_core_restore()'s own task regardless. */
-            fill_pathname_join_special(dest_path, h->dir_libretro,
-                  entry->filename, sizeof(dest_path));
-
-            if (path_is_valid(dest_path))
-            {
-               RARCH_LOG("[Core Bulk Install] OK: \"%s\"\n", entry->filename);
-               h->num_success++;
-            }
-            else
-            {
-               RARCH_LOG("[Core Bulk Install] Failed: \"%s\"\n", entry->filename);
-               h->num_failed++;
-               core_bulk_install_append_failed_name(h, entry->filename);
-            }
-
-            h->current_subtask = NULL;
-            h->current_index++;
-            h->status = CORE_BULK_INSTALL_NEXT;
+            RARCH_LOG("[Core Bulk Install] OK: \"%s\"\n", entry->filename);
+            h->num_success++;
          }
+         else
+         {
+            RARCH_LOG("[Core Bulk Install] Failed: \"%s\"\n", entry->filename);
+            h->num_failed++;
+            core_bulk_install_append_failed_name(h, entry->filename);
+         }
+
+         h->current_index++;
+         h->status = CORE_BULK_INSTALL_NEXT;
       }
       break;
 

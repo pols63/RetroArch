@@ -1847,10 +1847,13 @@ static void frontend_unix_get_env(int *argc,
 
             /* this section populates the paths for the assets that are bundled
                with the APK.
-               TODO/FIXME: change the extraction method so it honors the user defined paths instead
+               The bundle extractor (file_decompressed_subdir) strips the
+               "assets/" prefix from each APK entry, so bundled assets land
+               directly under app_dir (not app_dir/assets) - point the
+               default there to match.
             */
-            fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_ASSETS], app_dir,
-                  "assets", sizeof(g_defaults.dirs[DEFAULT_DIR_ASSETS]));
+            strlcpy(g_defaults.dirs[DEFAULT_DIR_ASSETS], app_dir,
+                  sizeof(g_defaults.dirs[DEFAULT_DIR_ASSETS]));
             fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_SHADER], app_dir,
                   "shaders", sizeof(g_defaults.dirs[DEFAULT_DIR_SHADER]));
             fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_OVERLAY], app_dir,

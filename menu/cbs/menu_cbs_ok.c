@@ -5986,10 +5986,10 @@ static int action_ok_sideload_core(const char *path,
       char backup_path[PATH_MAX_LENGTH];
       fill_pathname_join_special(
             backup_path, menu_path, path, sizeof(backup_path));
-      task_push_core_restore(backup_path, dir_libretro, &core_loaded, NULL);
+      task_push_core_restore(backup_path, dir_libretro, NULL, &core_loaded, NULL);
    }
    else
-      task_push_core_restore(path, dir_libretro, &core_loaded, NULL);
+      task_push_core_restore(path, dir_libretro, NULL, &core_loaded, NULL);
 
    /* Flush stack
     * > Since the 'sideload core' option is present
@@ -8780,7 +8780,7 @@ static int action_ok_core_restore_backup(const char *path,
     *   (otherwise user will be faced with 'no information
     *   available' when popping the stack - this would be
     *   confusing/ugly) */
-   if (   task_push_core_restore(backup_path, dir_libretro, &core_loaded, NULL)
+   if (   task_push_core_restore(backup_path, dir_libretro, NULL, &core_loaded, NULL)
        && core_loaded)
       menu_entries_flush_stack(NULL, 0);
    return 0;

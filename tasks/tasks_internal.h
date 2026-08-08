@@ -189,14 +189,36 @@ void *task_push_core_backup(
 
 /* NOTE 1: If 'core_loaded' is true, menu stack should be
  * flushed if task_push_core_restore() returns true
- * NOTE 2: 'out_task' is optional (may be NULL). If non-NULL,
- * it is set to the pushed retro_task_t* on success (for
- * callers that need to poll RETRO_TASK_FLG_FINISHED on it,
- * e.g. a bulk-install coordinator), or to NULL on failure. */
+ * NOTE 2: 'out_task' is optional (may be NULL). If non-NULL, it is
+ * set to the pushed retro_task_t* on success, or to NULL on
+ * failure. This is for identity/logging only - the task may be
+ * retired and freed (on another thread) at any point afterwards, so
+ * do not dereference it or poll task_get_flags()/task_get_data() on
+ * it later. Callers that need to know when this specific restore
+ * has finished (e.g. a bulk-install coordinator sequencing one core
+ * at a time) should poll task_core_backup_find() instead.
+ * NOTE 3: 'core_display_name' is optional (may be NULL/empty), same
+ * as task_push_core_backup()'s parameter of the same name above -
+ * and for the same reason, it *must* be set to a non-empty string
+ * if this is *not* called on the main thread. Without it, this
+ * function looks up the display name (and validates the core-lock
+ * check) via core_info_find(), which reads global core-info state
+ * that is rebuilt with no locking whenever CMD_EVENT_CORE_INFO_INIT
+ * runs on the main thread - including from this function's own
+ * finish callback for a *previous* restore, which is exactly the
+ * situation a bulk-install coordinator creates. */
 bool task_push_core_restore(const char *backup_path,
       const char *dir_libretro,
+      const char *core_display_name,
       bool *core_loaded,
       retro_task_t **out_task);
+
+/* Thread-safe alternative to polling RETRO_TASK_FLG_FINISHED on the
+ * retro_task_t* returned via 'out_task' above: reports whether a
+ * backup/restore task for 'core_path' is still running or retiring,
+ * without ever dereferencing task memory that may already have been
+ * freed by the (asynchronous, cross-thread) task retirement path. */
+bool task_core_backup_find(const char *core_path);
 
 #if defined(ANDROID) && defined(HAVE_SAF)
 /* Bulk core install/backup via a user-selected SAF folder

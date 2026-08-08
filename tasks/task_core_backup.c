@@ -233,6 +233,31 @@ static bool task_core_backup_finder(retro_task_t *task, void *user_data)
    return string_is_equal(core_filename_a, core_filename_b);
 }
 
+/* Reports whether a backup/restore task for 'core_path' is still
+ * running, finished-but-uncalled-back, or retiring - i.e. still
+ * reachable via the task queue by any thread. Unlike stashing the
+ * retro_task_t* handed back by task_push_core_restore()/
+ * task_push_core_backup() and polling task_get_flags() on it
+ * directly, this never touches task memory that may have already
+ * been freed by the finished-task retirement path (which runs
+ * asynchronously, typically on the main thread) - task_queue_find()
+ * only ever reports true/false under its own locks. Callers that
+ * need to wait for a specific task they just pushed to fully
+ * complete (e.g. a bulk-install coordinator sequencing one core at
+ * a time) should poll this instead of the task pointer. */
+bool task_core_backup_find(const char *core_path)
+{
+   task_finder_data_t find_data;
+
+   if (!core_path || !*core_path)
+      return false;
+
+   find_data.func     = task_core_backup_finder;
+   find_data.userdata = (void*)core_path;
+
+   return task_queue_find(&find_data);
+}
+
 /***************/
 /* Core Backup */
 /***************/
@@ -1267,6 +1292,7 @@ task_finished:
 }
 
 bool task_push_core_restore(const char *backup_path, const char *dir_libretro,
+      const char *core_display_name,
       bool *core_loaded, retro_task_t **out_task)
 {
    size_t _len;
@@ -1322,20 +1348,36 @@ bool task_push_core_restore(const char *backup_path, const char *dir_libretro,
    }
 
    /* Get core name
-    * > If core is found, use display name */
-   if (   core_info_find(core_path, &core_info)
-       && core_info->display_name)
+    * > If caller supplied a display name, use it directly - this
+    *   is required when called off the main thread (see the NOTE
+    *   on the prototype in tasks_internal.h): core_info_find()
+    *   reads the global core-info list, which is rebuilt with no
+    *   locking whenever CMD_EVENT_CORE_INFO_INIT runs on the main
+    *   thread (e.g. from this same function's own finish
+    *   callback, cb_task_core_restore(), for a previous restore),
+    *   so calling it concurrently from another thread races that
+    *   rebuild
+    * > Otherwise, if core is found, use its display name
+    * > Otherwise, use the core file name */
+   if (core_display_name && *core_display_name)
+      core_name = core_display_name;
+   else if (   core_info_find(core_path, &core_info)
+            && core_info->display_name)
       core_name = core_info->display_name;
    else
    {
-      /* > If not, use core file name */
       core_name = path_basename(core_path);
       if (!core_name || !*core_name)
          goto error;
    }
 
-   /* Check whether core is locked */
-   if (core_info_get_core_lock(core_path, true))
+   /* Check whether core is locked
+    * > 'validate_path' is left false when a display name was
+    *   supplied, for the same off-main-thread reason as above -
+    *   core_info_get_core_lock() only calls core_info_find() when
+    *   'validate_path' is true */
+   if (core_info_get_core_lock(core_path,
+            !(core_display_name && *core_display_name)))
    {
       char msg[128];
       _len = strlcpy(msg,
