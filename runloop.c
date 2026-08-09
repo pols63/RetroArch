@@ -6621,9 +6621,29 @@ static enum runloop_state_enum runloop_check_state(
        * with a freshly (re)built menu. */
       if (menu_st->flags & MENU_ST_FLAG_PENDING_CONFIG_REPLACE)
       {
-         bool config_save_on_exit = settings->bools.config_save_on_exit;
-         menu_st->flags          &= ~MENU_ST_FLAG_PENDING_CONFIG_REPLACE;
+         bool config_save_on_exit  = settings->bools.config_save_on_exit;
+         bool restore_config_path  = menu_st->pending_config_path_is_temp
+               && !path_is_empty(RARCH_PATH_CONFIG);
+         char original_config_path[PATH_MAX_LENGTH];
+
+         if (restore_config_path)
+            strlcpy(original_config_path, path_get(RARCH_PATH_CONFIG),
+                  sizeof(original_config_path));
+
+         menu_st->flags                       &= ~MENU_ST_FLAG_PENDING_CONFIG_REPLACE;
+         menu_st->pending_config_path_is_temp  = false;
          config_replace(config_save_on_exit, menu_st->pending_config_path);
+
+         /* pending_config_path was a throwaway staging copy (Android SAF
+          * import) - config_replace() already loaded its settings into
+          * memory, but must not leave RARCH_PATH_CONFIG pointing at a
+          * private cache file that gets deleted right after the copy, or
+          * every save from here on would silently write there instead of
+          * the real retroarch.cfg. See
+          * menu_state::pending_config_path_is_temp. */
+         if (restore_config_path)
+            path_set(RARCH_PATH_CONFIG, original_config_path);
+
          return RUNLOOP_STATE_POLLED_AND_SLEEP;
       }
 #endif

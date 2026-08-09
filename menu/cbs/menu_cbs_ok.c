@@ -2384,7 +2384,7 @@ int generic_action_ok_command(enum event_command cmd)
 }
 
 /* See declaration in menu_cbs.h for why this exists and who calls it. */
-void menu_cbs_stage_config_import(const char *path)
+void menu_cbs_stage_config_import(const char *path, bool is_temporary)
 {
 #ifdef HAVE_CONFIGFILE
    struct menu_state *menu_st = menu_state_get_ptr();
@@ -2394,6 +2394,7 @@ void menu_cbs_stage_config_import(const char *path)
 
    strlcpy(menu_st->pending_config_path, path,
          sizeof(menu_st->pending_config_path));
+   menu_st->pending_config_path_is_temp = is_temporary;
 
    generic_action_ok_displaylist_push(NULL, NULL,
          MENU_ENUM_LABEL_IMPORT_CONFIG_STR, MENU_SETTING_ACTION, 0, 0,
@@ -2528,7 +2529,7 @@ static int generic_action_ok(const char *path,
          /* Stage the chosen path and show a confirmation screen rather
           * than replacing the configuration immediately - see
           * menu_cbs_stage_config_import() for why. */
-         menu_cbs_stage_config_import(action_path);
+         menu_cbs_stage_config_import(action_path, false);
 #endif
          break;
       case ACTION_OK_LOAD_PRESET:
@@ -4426,7 +4427,7 @@ static int action_ok_import_config(const char *path,
    {
       char picked_path[PATH_MAX_LENGTH];
       if (cocoa_show_config_import_dialog(picked_path, sizeof(picked_path)))
-         menu_cbs_stage_config_import(picked_path);
+         menu_cbs_stage_config_import(picked_path, false);
       return 0;
    }
 #else
@@ -4451,7 +4452,7 @@ static int action_ok_export_config(const char *path,
             settings->paths.directory_cache, "export_staging.cfg",
             sizeof(staging_path));
       command_event_export_config(staging_path);
-      android_show_saf_create_document_picker("retroarch.cfg");
+      android_show_saf_create_document_picker("retroarch.cfg", staging_path);
    }
    return 0;
 #elif defined(_WIN32) && !defined(_XBOX) && defined(HAVE_MENU)

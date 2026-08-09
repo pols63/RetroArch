@@ -425,9 +425,19 @@ void android_show_saf_tree_picker_purpose(enum android_saf_purpose purpose);
  * streamed through a private cache file on the Java side
  * (RetroActivityCommon.copySafDocumentToCache()/onActivityResult()) so
  * native code only ever deals with plain filesystem paths. See
- * menu_cbs_ok.c's action_ok_import_config / action_ok_export_config. */
+ * menu_cbs_ok.c's action_ok_import_config / action_ok_export_config.
+ *
+ * android_show_saf_create_document_picker()'s staging_path must be the
+ * exact plain filesystem path that the caller already wrote the export
+ * to - it is handed to Java verbatim so it can copy from there once the
+ * user picks a destination. It must NOT be assumed to be Java's
+ * getCacheDir(): settings->paths.directory_cache (what callers build it
+ * from) defaults to a directory under external storage on Android
+ * (parent_path + "/temp"), not the app's private cache dir, so the two
+ * used to silently disagree and the export ended up empty. */
 void android_show_saf_open_document_picker(void);
-void android_show_saf_create_document_picker(const char *suggested_name);
+void android_show_saf_create_document_picker(const char *suggested_name,
+      const char *staging_path);
 #endif
 
 #endif

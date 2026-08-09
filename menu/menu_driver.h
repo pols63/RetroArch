@@ -553,6 +553,19 @@ struct menu_state
     * config_replace() is performed from runloop_check_state(),
     * never from within menu iteration */
    char pending_config_path[PATH_MAX_LENGTH];
+   /* True when pending_config_path is a throwaway staging copy rather
+    * than a path the user actually owns (currently: Android's SAF
+    * "Import a Configuration File", which streams the picked document
+    * into a private cache file first - see safConfigImportReady() in
+    * platform_unix.c). config_replace() unconditionally repoints
+    * RARCH_PATH_CONFIG at whatever path it's given, since for a real
+    * file path (Windows/macOS/the in-menu browser) that's the desired
+    * "Load Configuration"-style behaviour; for a staging file it would
+    * leave later saves ("Save Current Configuration") silently writing
+    * into a cache file instead of the real retroarch.cfg, so
+    * runloop_check_state() restores RARCH_PATH_CONFIG afterwards when
+    * this is set. */
+   bool pending_config_path_is_temp;
 
 #ifdef HAVE_MENU
    char input_dialog_kb_label_setting[256];

@@ -1023,7 +1023,7 @@ void win32_show_config_import_dialog(void)
 #else
    if (win32_browser(main_window.hwnd, win32_file, sizeof(win32_file),
             extensions, title, initial_dir))
-      menu_cbs_stage_config_import(win32_file);
+      menu_cbs_stage_config_import(win32_file, false);
 #endif
 }
 

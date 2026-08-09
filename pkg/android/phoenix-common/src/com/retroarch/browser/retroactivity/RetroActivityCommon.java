@@ -107,6 +107,11 @@ public class RetroActivityCommon extends NativeActivity
    * android_show_saf_open_document_picker()/_create_document_picker(). */
   public static final int REQUEST_CODE_OPEN_DOCUMENT_CONFIG = 1;
   public static final int REQUEST_CODE_CREATE_DOCUMENT_CONFIG = 2;
+  /* Plain filesystem path native code already wrote the current settings
+   * to, passed down verbatim by requestCreateDocument() below - see its
+   * comment for why this must NOT be reconstructed independently here
+   * (e.g. via getCacheDir()) instead of trusting the value native sent. */
+  private String mConfigExportStagingPath;
   public boolean sustainedPerformanceMode = true;
   public int screenOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
@@ -261,13 +266,19 @@ public class RetroActivityCommon extends NativeActivity
       case REQUEST_CODE_CREATE_DOCUMENT_CONFIG:
         {
           /* "Export a Configuration File": native code already wrote the
-           * current settings to <cacheDir>/export_staging.cfg (see
+           * current settings to mConfigExportStagingPath (see
            * android_show_saf_create_document_picker() in
            * platform_unix.c) before launching this picker; copy that
-           * staging file into the SAF-picked destination. */
+           * staging file into the SAF-picked destination. Must use the
+           * exact path native sent, not a locally-reconstructed
+           * getCacheDir() - settings->paths.directory_cache (what native
+           * builds the staging path from) does not default to
+           * getCacheDir() on Android, so the two used to silently
+           * disagree and the export ended up empty. */
           Uri uri = intent.getData();
-          File staging = new File(getCacheDir(), "export_staging.cfg");
-          if (uri != null && staging.exists())
+          File staging = (mConfigExportStagingPath != null)
+              ? new File(mConfigExportStagingPath) : null;
+          if (uri != null && staging != null && staging.exists())
           {
             try (InputStream in = new FileInputStream(staging);
                  OutputStream out = getContentResolver().openOutputStream(uri))
@@ -280,7 +291,9 @@ public class RetroActivityCommon extends NativeActivity
               Log.e("RetroActivityCommon", "Failed to export configuration", e);
             }
           }
-          staging.delete();
+          if (staging != null)
+            staging.delete();
+          mConfigExportStagingPath = null;
         }
         break;
 
@@ -334,12 +347,31 @@ public class RetroActivityCommon extends NativeActivity
   }
 
   /* "Export a Configuration File": called from
-   * android_show_saf_create_document_picker() (platform_unix.c). */
-  public void requestCreateDocument(String suggestedName)
+   * android_show_saf_create_document_picker() (platform_unix.c).
+   * stagingPath is the plain filesystem path native already wrote the
+   * current settings to - stashed here (an Intent extra wouldn't survive
+   * the round trip, since onActivityResult()'s intent is the picker's
+   * result, not this request) so onActivityResult() can copy from the
+   * exact path native used instead of guessing at one locally.
+   *
+   * Deliberately "application/octet-stream", not the wildcard type: on
+   * conflict, DocumentsProvider.createDocument() (e.g.
+   * ExternalStorageProvider, used for on-device/SD storage) resolves the
+   * name/extension split via FileUtils.buildUniqueFile(), which compares
+   * the extension implied by the requested MIME type against the one in
+   * the display name. ".cfg" isn't a MimeTypeMap-registered extension,
+   * so its implied MIME type falls back to "application/octet-stream" -
+   * matching this exact string is what makes the provider split
+   * "retroarch"/".cfg" and rename collisions as "retroarch (1).cfg"
+   * instead of appending " (1)" to the untouched "retroarch.cfg" string
+   * (i.e. "retroarch.cfg (1)", no extension), which is what the
+   * wildcard type produced. */
+  public void requestCreateDocument(String suggestedName, String stagingPath)
   {
+    mConfigExportStagingPath = stagingPath;
     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
     intent.addCategory(Intent.CATEGORY_OPENABLE);
-    intent.setType("*/*");
+    intent.setType("application/octet-stream");
     intent.putExtra(Intent.EXTRA_TITLE, suggestedName);
     startActivityForResult(intent, REQUEST_CODE_CREATE_DOCUMENT_CONFIG);
   }

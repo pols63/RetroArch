@@ -280,8 +280,15 @@ int generic_action_ok_displaylist_push(const char *path, const char *new_path,
  * confirmation screen ("Import and Overwrite" / "Cancel") rather than
  * replacing the configuration immediately. Shared by the internal file
  * browser (menu_cbs_ok.c) and the native file pickers on Windows, macOS
- * and Android (win32_common.c, ui_cocoa.m, platform_unix.c). */
-void menu_cbs_stage_config_import(const char *path);
+ * and Android (win32_common.c, ui_cocoa.m, platform_unix.c).
+ *
+ * is_temporary must be true only when 'path' is a throwaway staging
+ * copy the caller doesn't actually own (Android's SAF import, which
+ * streams the picked document into a private cache file - see
+ * safConfigImportReady() in platform_unix.c) - see
+ * menu_state::pending_config_path_is_temp for why. Every other caller
+ * hands over a real, user-owned path and must pass false. */
+void menu_cbs_stage_config_import(const char *path, bool is_temporary);
 
 #if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
 /* Scans 'folder' for bulk core install/backup once a folder has been

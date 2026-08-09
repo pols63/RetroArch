@@ -669,7 +669,7 @@ static LRESULT CALLBACK wnd_proc_common(
                      break;
 #if defined(HAVE_MENU) && defined(HAVE_CONFIGFILE)
                   case WIN32_BROWSER_MODE_LOAD_CONFIG:
-                     menu_cbs_stage_config_import(td->path);
+                     menu_cbs_stage_config_import(td->path, false);
                      break;
                   case WIN32_BROWSER_MODE_SAVE_CONFIG:
                      command_event_export_config(td->path);
