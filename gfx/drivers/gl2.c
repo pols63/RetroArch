@@ -789,22 +789,6 @@ static void gfx_display_gl2_scissor_end(
 #endif
 }
 
-gfx_display_ctx_driver_t gfx_display_ctx_gl = {
-   gfx_display_gl2_draw,
-   gfx_display_gl2_draw_pipeline,
-   gfx_display_gl2_blend_begin,
-   gfx_display_gl2_blend_end,
-   gfx_display_gl2_get_default_mvp,
-   gfx_display_gl2_get_default_vertices,
-   gfx_display_gl2_get_default_tex_coords,
-   FONT_DRIVER_RENDER_OPENGL_API,
-   GFX_VIDEO_DRIVER_OPENGL,
-   "gl",
-   false,
-   gfx_display_gl2_scissor_begin,
-   gfx_display_gl2_scissor_end
-};
-
 /**
  * FONT DRIVER
  */
@@ -915,7 +899,7 @@ static void *gl2_raster_font_init(void *data,
 
    if (!font_renderer_create_default(
             &font->font_driver,
-            &font->font_data, font_path, font_size))
+            &font->font_data, font_path, font_size, FONT_ATLAS_FORMAT_A8))
    {
       free(font);
       return NULL;
@@ -1323,18 +1307,6 @@ static bool gl2_raster_font_get_line_metrics(void* data, struct font_line_metric
    }
    return false;
 }
-
-font_renderer_t gl2_raster_font = {
-   gl2_raster_font_init,
-   gl2_raster_font_free,
-   gl2_raster_font_render_msg,
-   "gl",
-   gl2_raster_font_get_glyph,
-   gl2_raster_font_bind_block,
-   gl2_raster_font_flush_block,
-   gl2_raster_font_get_message_width,
-   gl2_raster_font_get_line_metrics
-};
 
 /*
  * VIDEO DRIVER
@@ -3443,124 +3415,6 @@ static void gl2_set_texture_enable(void *data, bool state, bool full_screen)
       gl->flags                &= ~GL2_FLAG_MENU_TEXTURE_FULLSCREEN;
 }
 
-static void gl2_render_osd_background(gl2_t *gl, bool video_scale_integer, const char *msg)
-{
-   video_coords_t coords;
-   struct uniform_info uniform_param;
-   float colors[4];
-   const unsigned
-      vertices_total       = 6;
-   float *dummy            = (float*)calloc(4 * vertices_total, sizeof(float));
-   float *verts            = (float*)malloc(2 * vertices_total * sizeof(float));
-   settings_t *settings    = config_get_ptr();
-   float video_font_size   = settings->floats.video_font_size;
-   /* NOTE: must go through the font driver here - the active font is
-    * owned by the font driver, not by gl2_t. Calling
-    * gl2_raster_font_get_message_width() with 'gl' reinterprets a
-    * gl2_t* as a gl2_raster_t*, which reads ctx_data/ctx_driver as
-    * font_driver/font_data and then branches through a garbage
-    * get_glyph pointer. */
-   int msg_width           =
-      font_driver_get_message_width(NULL, msg, strlen(msg), 1.0f);
-
-   /* shader driver expects vertex coords as 0..1 */
-   float x                 = settings->floats.video_msg_pos_x;
-   float y                 = settings->floats.video_msg_pos_y;
-   float width             = (msg_width > 0 ? msg_width : 0)
-      / (float)gl->video_width;
-   float height            = video_font_size / (float)gl->video_height;
-   float x2                = 0.005f; /* extend background around text */
-   float y2                = 0.005f;
-
-   x                      -= x2;
-   y                      -= y2;
-   width                  += x2;
-   height                 += y2;
-
-   colors[0]               = settings->uints.video_msg_bgcolor_red   / 255.0f;
-   colors[1]               = settings->uints.video_msg_bgcolor_green / 255.0f;
-   colors[2]               = settings->uints.video_msg_bgcolor_blue  / 255.0f;
-   colors[3]               = settings->floats.video_msg_bgcolor_opacity;
-
-   /* triangle 1 */
-   verts[0]                = x;
-   verts[1]                = y; /* bottom-left */
-
-   verts[2]                = x;
-   verts[3]                = y + height; /* top-left */
-
-   verts[4]                = x + width;
-   verts[5]                = y + height; /* top-right */
-
-   /* triangle 2 */
-   verts[6]                = x;
-   verts[7]                = y; /* bottom-left */
-
-   verts[8]                = x + width;
-   verts[9]                = y + height; /* top-right */
-
-   verts[10]               = x + width;
-   verts[11]               = y; /* bottom-right */
-
-   coords.color            = dummy;
-   coords.vertex           = verts;
-   coords.tex_coord        = dummy;
-   coords.lut_tex_coord    = dummy;
-   coords.vertices         = vertices_total;
-
-   gl2_set_viewport(gl,
-         gl->video_width,
-         gl->video_height, true, false);
-
-   gl->shader->use(gl, gl->shader_data,
-         VIDEO_SHADER_STOCK_BLEND, true);
-
-   gl->shader->set_coords(gl->shader_data, &coords);
-
-   glEnable(GL_BLEND);
-   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-   glBlendEquation(GL_FUNC_ADD);
-
-   gl->shader->set_mvp(gl->shader_data, &gl->mvp_no_rot);
-
-   uniform_param.type              = UNIFORM_4F;
-   uniform_param.enabled           = true;
-   uniform_param.location          = 0;
-   uniform_param.count             = 0;
-
-   uniform_param.lookup.type       = SHADER_PROGRAM_FRAGMENT;
-   uniform_param.lookup.ident      = "bgcolor";
-   uniform_param.lookup.idx        = VIDEO_SHADER_STOCK_BLEND;
-   uniform_param.lookup.add_prefix = true;
-   uniform_param.lookup.enable     = true;
-
-   uniform_param.result.f.v0       = colors[0];
-   uniform_param.result.f.v1       = colors[1];
-   uniform_param.result.f.v2       = colors[2];
-   uniform_param.result.f.v3       = colors[3];
-
-   gl->shader->set_uniform_parameter(gl->shader_data,
-         &uniform_param, NULL);
-
-   glDrawArrays(GL_TRIANGLES, 0, coords.vertices);
-
-   /* reset uniform back to zero so it is not used for anything else */
-   uniform_param.result.f.v0       = 0.0f;
-   uniform_param.result.f.v1       = 0.0f;
-   uniform_param.result.f.v2       = 0.0f;
-   uniform_param.result.f.v3       = 0.0f;
-
-   gl->shader->set_uniform_parameter(gl->shader_data,
-         &uniform_param, NULL);
-
-   free(dummy);
-   free(verts);
-
-   gl2_set_viewport(gl,
-         gl->video_width,
-         gl->video_height, false, true);
-}
-
 static void gl2_show_mouse(void *data, bool state)
 {
    gl2_t                            *gl = (gl2_t*)data;
@@ -4316,11 +4170,7 @@ static bool gl2_frame(void *data, const void *frame,
 #endif
 
    if (msg && *msg)
-   {
-      if (msg_bgcolor_enable)
-         gl2_render_osd_background(gl, video_scale_integer, msg);
       font_driver_render_msg(gl, msg, strlen(msg), NULL, NULL);
-   }
 
    if (gl->ctx_driver->update_window_title)
       gl->ctx_driver->update_window_title(gl->ctx_data);
@@ -4606,7 +4456,6 @@ static void gl2_free(void *data)
             (gl2_renderchain_data_t*)
             gl->renderchain_data);
 
-   font_driver_free_osd();
 
    gl->shader->deinit(gl->shader_data);
 
@@ -5469,10 +5318,6 @@ static void *gl2_init(const video_info_t *video,
             input, input_data);
    }
 
-      font_driver_init_osd(gl, video,
-            false,
-            video->is_threaded,
-            FONT_DRIVER_RENDER_OPENGL_API);
 
    /* Only bother with PBO readback if we're doing GPU recording.
     * Check recording_st->enable and not
@@ -6432,6 +6277,18 @@ static bool gl2_read_viewport_hdr(void *data, uint16_t *buffer,
    return true;
 }
 
+static font_renderer_t gl2_raster_font = {
+   gl2_raster_font_init,
+   gl2_raster_font_free,
+   gl2_raster_font_render_msg,
+   "gl",
+   gl2_raster_font_get_glyph,
+   gl2_raster_font_bind_block,
+   gl2_raster_font_flush_block,
+   gl2_raster_font_get_message_width,
+   gl2_raster_font_get_line_metrics
+};
+
 video_driver_t video_gl2 = {
    gl2_init,
    gl2_frame,
@@ -6463,5 +6320,22 @@ video_driver_t video_gl2 = {
    gl2_gfx_widgets_enabled,
 #endif
    NULL, /* invalidate_hw_render_cache */
-   gl2_read_viewport_hdr
+   gl2_read_viewport_hdr,
+   &gl2_raster_font
+};
+
+gfx_display_ctx_driver_t gfx_display_ctx_gl = {
+   gfx_display_gl2_draw,
+   gfx_display_gl2_draw_pipeline,
+   gfx_display_gl2_blend_begin,
+   gfx_display_gl2_blend_end,
+   gfx_display_gl2_get_default_mvp,
+   gfx_display_gl2_get_default_vertices,
+   gfx_display_gl2_get_default_tex_coords,
+   &gl2_raster_font,
+   GFX_VIDEO_DRIVER_OPENGL,
+   "gl",
+   false,
+   gfx_display_gl2_scissor_begin,
+   gfx_display_gl2_scissor_end
 };

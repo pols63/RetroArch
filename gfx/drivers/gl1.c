@@ -519,22 +519,6 @@ static void gfx_display_gl1_scissor_end(
    glDisable(GL_SCISSOR_TEST);
 }
 
-gfx_display_ctx_driver_t gfx_display_ctx_gl1 = {
-   gfx_display_gl1_draw,
-   NULL, /* draw_pipeline */
-   gfx_display_gl1_blend_begin,
-   gfx_display_gl1_blend_end,
-   gfx_display_gl1_get_default_mvp,
-   gfx_display_gl1_get_default_vertices,
-   gfx_display_gl1_get_default_tex_coords,
-   FONT_DRIVER_RENDER_OPENGL1_API,
-   GFX_VIDEO_DRIVER_OPENGL1,
-   "gl1",
-   false,
-   gfx_display_gl1_scissor_begin,
-   gfx_display_gl1_scissor_end
-};
-
 /**
  * FONT DRIVER
  */
@@ -659,7 +643,7 @@ static void *gl1_raster_font_init(void *data,
 
    if (!font_renderer_create_default(
             &font->font_driver,
-            &font->font_data, font_path, font_size))
+            &font->font_data, font_path, font_size, FONT_ATLAS_FORMAT_A8))
    {
       free(font);
       return NULL;
@@ -1137,18 +1121,6 @@ static bool gl1_raster_font_get_line_metrics(void* data, struct font_line_metric
    return false;
 }
 
-font_renderer_t gl1_raster_font = {
-   gl1_raster_font_init,
-   gl1_raster_font_free,
-   gl1_raster_font_render_msg,
-   "gl1",
-   gl1_raster_font_get_glyph,
-   gl1_raster_font_bind_block,
-   gl1_raster_font_flush_block,
-   gl1_raster_font_get_message_width,
-   gl1_raster_font_get_line_metrics
-};
-
 /*
  * VIDEO DRIVER
  */
@@ -1504,11 +1476,6 @@ static void *gl1_init(const video_info_t *video,
             input, input_data);
    }
 
-      font_driver_init_osd(gl1,
-            video,
-            false,
-            video->is_threaded,
-            FONT_DRIVER_RENDER_OPENGL1_API);
 
    if (video_smooth)
       gl1->flags     |= GL1_FLAG_SMOOTH;
@@ -2800,7 +2767,6 @@ static void gl1_free(void *data)
       string_list_free(gl1->extensions);
    gl1->extensions = NULL;
 
-   font_driver_free_osd();
    if (gl1->ctx_driver && gl1->ctx_driver->destroy)
       gl1->ctx_driver->destroy(gl1->ctx_data);
    video_context_driver_free();
@@ -3481,6 +3447,18 @@ static bool gl1_read_viewport_hdr(void *data, uint16_t *buffer,
 #endif /* VITA */
 }
 
+static font_renderer_t gl1_raster_font = {
+   gl1_raster_font_init,
+   gl1_raster_font_free,
+   gl1_raster_font_render_msg,
+   "gl1",
+   gl1_raster_font_get_glyph,
+   gl1_raster_font_bind_block,
+   gl1_raster_font_flush_block,
+   gl1_raster_font_get_message_width,
+   gl1_raster_font_get_line_metrics
+};
+
 video_driver_t video_gl1 = {
    gl1_init,
    gl1_frame,
@@ -3508,5 +3486,23 @@ video_driver_t video_gl1 = {
    gl1_widgets_enabled,
 #endif
    NULL, /* invalidate_hw_render_cache */
-   gl1_read_viewport_hdr
+   gl1_read_viewport_hdr,
+   &gl1_raster_font
 };
+
+gfx_display_ctx_driver_t gfx_display_ctx_gl1 = {
+   gfx_display_gl1_draw,
+   NULL, /* draw_pipeline */
+   gfx_display_gl1_blend_begin,
+   gfx_display_gl1_blend_end,
+   gfx_display_gl1_get_default_mvp,
+   gfx_display_gl1_get_default_vertices,
+   gfx_display_gl1_get_default_tex_coords,
+   &gl1_raster_font,
+   GFX_VIDEO_DRIVER_OPENGL1,
+   "gl1",
+   false,
+   gfx_display_gl1_scissor_begin,
+   gfx_display_gl1_scissor_end
+};
+
