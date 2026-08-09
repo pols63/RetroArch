@@ -675,6 +675,14 @@ static LRESULT CALLBACK wnd_proc_common(
                      command_event_export_config(td->path);
                      break;
 #endif
+#ifdef HAVE_MENU
+                  case WIN32_BROWSER_MODE_BULK_INSTALL_CORES:
+                     menu_cbs_finish_bulk_install_scan(td->path);
+                     break;
+                  case WIN32_BROWSER_MODE_BULK_BACKUP_CORES:
+                     menu_cbs_finish_bulk_backup_scan(td->path);
+                     break;
+#endif
                   default:
                      break;
                }

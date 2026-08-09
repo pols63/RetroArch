@@ -267,9 +267,17 @@ static bool ui_browser_window_cocoa_save(ui_browser_window_state_t *state)
    return true;
 }
 
+/* Not implemented yet on macOS - bulk core install/backup folder
+ * selection is Windows/Android-only for now. */
+static bool ui_browser_window_cocoa_directory(ui_browser_window_state_t *state)
+{
+   return false;
+}
+
 static ui_browser_window_t ui_browser_window_cocoa = {
    ui_browser_window_cocoa_open,
    ui_browser_window_cocoa_save,
+   ui_browser_window_cocoa_directory,
    "cocoa"
 };
 

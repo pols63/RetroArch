@@ -4363,9 +4363,15 @@ static bool ui_browser_window_qt_save(ui_browser_window_state_t *state)
    return false;
 }
 
+static bool ui_browser_window_qt_directory(ui_browser_window_state_t *state)
+{
+   return false;
+}
+
 static ui_browser_window_t ui_browser_window_qt = {
    ui_browser_window_qt_open,
    ui_browser_window_qt_save,
+   ui_browser_window_qt_directory,
    "qt"
 };
 

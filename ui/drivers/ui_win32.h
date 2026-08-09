@@ -62,7 +62,9 @@ enum win32_browser_mode
    WIN32_BROWSER_MODE_LOAD_CONTENT = 0,
    WIN32_BROWSER_MODE_LOAD_CORE,
    WIN32_BROWSER_MODE_LOAD_CONFIG,
-   WIN32_BROWSER_MODE_SAVE_CONFIG
+   WIN32_BROWSER_MODE_SAVE_CONFIG,
+   WIN32_BROWSER_MODE_BULK_INSTALL_CORES,
+   WIN32_BROWSER_MODE_BULK_BACKUP_CORES
 };
 
 typedef struct
@@ -149,6 +151,17 @@ void win32_menubar_rebuild(void);
 void win32_show_config_import_dialog(void);
 void win32_show_config_export_dialog(const char *suggested_name);
 #endif
+
+/* "Install Cores from Folder (Bulk)" / "Backup Cores" (Main Menu >
+ * Manage Cores) on Windows: shows a native folder-browse dialog
+ * (SHBrowseForFolder) instead of Android's SAF tree picker. See
+ * menu_cbs_ok.c's action_ok_core_bulk_install_saf / _backup_saf for the
+ * cross-platform dispatch, and gfx/common/win32_common.c's
+ * WM_BROWSER_OPEN_RESULT handler for how the (threaded, asynchronous)
+ * result is applied via menu_cbs_finish_bulk_install_scan()/
+ * menu_cbs_finish_bulk_backup_scan(). */
+void win32_show_bulk_install_cores_dialog(void);
+void win32_show_bulk_backup_cores_dialog(void);
 #endif
 #ifndef __WINRT__
 HMENU win32_resources_create_menu(void);

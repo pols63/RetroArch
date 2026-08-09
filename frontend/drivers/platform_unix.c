@@ -765,47 +765,10 @@ JNIEXPORT void JNICALL Java_com_retroarch_browser_retroactivity_RetroActivityCom
    switch (purpose)
    {
       case ANDROID_SAF_PURPOSE_BULK_INSTALL_CORES:
-      {
-         settings_t *settings     = config_get_ptr();
-         const char *dir_libretro = settings->paths.directory_libretro;
-
-         if (   core_bulk_install_scan(tree, dir_libretro) > 0
-             || core_bulk_install_pending_has_info_zip())
-            generic_action_ok_displaylist_push(
-                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_SAF),
-                  NULL,
-                  MENU_ENUM_LABEL_CORE_BULK_INSTALL_SAF_STR,
-                  MENU_SETTING_ACTION,
-                  0, 0,
-                  ACTION_OK_DL_CORE_BULK_INSTALL_CONFIRM_LIST);
-         else
-            runloop_msg_queue_push(
-                  "No core files found in that folder.",
-                  STRLEN_CONST("No core files found in that folder."),
-                  1, 100, true, NULL,
-                  MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
-      }
+         menu_cbs_finish_bulk_install_scan(tree);
       break;
       case ANDROID_SAF_PURPOSE_BACKUP_CORES:
-      {
-         settings_t *settings     = config_get_ptr();
-         const char *dir_libretro = settings->paths.directory_libretro;
-
-         if (core_bulk_backup_scan(dir_libretro, tree) > 0)
-            generic_action_ok_displaylist_push(
-                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_SAF),
-                  NULL,
-                  MENU_ENUM_LABEL_CORE_BULK_BACKUP_SAF_STR,
-                  MENU_SETTING_ACTION,
-                  0, 0,
-                  ACTION_OK_DL_CORE_BULK_BACKUP_CONFIRM_LIST);
-         else
-            runloop_msg_queue_push(
-                  "No installed cores found to back up.",
-                  STRLEN_CONST("No installed cores found to back up."),
-                  1, 100, true, NULL,
-                  MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
-      }
+         menu_cbs_finish_bulk_backup_scan(tree);
       break;
       case ANDROID_SAF_PURPOSE_BROWSE:
       default:

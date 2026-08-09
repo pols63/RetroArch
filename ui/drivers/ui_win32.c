@@ -39,9 +39,10 @@
 #include <windows.h>
 #include <commdlg.h>
 #include <commctrl.h>
-#ifdef HAVE_THREADS
+/* CoTaskMemFree() (used to free the LPITEMIDLIST from SHBrowseForFolderW)
+ * is needed regardless of HAVE_THREADS, unlike CoInitializeEx/CoUninitialize
+ * below which are only used by the threaded file/folder dialog path. */
 #include <objbase.h>
-#endif
 
 #include <retro_inline.h>
 #include <retro_miscellaneous.h>
@@ -71,6 +72,7 @@
 #include "../../menu/menu_cbs.h"
 #endif
 #include <shellapi.h>
+#include <shlobj.h>
 #include <ctype.h>
 
 #ifdef HAVE_MENU
@@ -476,9 +478,152 @@ static bool ui_browser_window_win32_save(ui_browser_window_state_t *state)
    return ui_browser_window_win32_core(state, true);
 }
 
+/* Folder picker (SHBrowseForFolderW) for "Install Cores from Folder
+ * (Bulk)" / "Backup Cores". Unlike ui_browser_window_win32_core() above
+ * (OPENFILENAME, file-only) this is a separate API entirely - classic
+ * comdlg32 has no folder-picking mode. BIF_NEWDIALOGSTYLE needs COM
+ * initialised on the calling thread (silently falls back to the old
+ * dialog style otherwise). */
+#ifdef HAVE_THREADS
+/* Runs on the worker thread spawned by ui_browser_window_win32_directory()
+ * below - same fire-and-forget shape as ui_browser_window_win32_thread(),
+ * reusing win32_browser_thread_data_t (filters/startdir/is_save are
+ * simply unused in this mode) so gfx/common/win32_common.c's single
+ * WM_BROWSER_OPEN_RESULT handler keeps working unchanged for every mode. */
+static void ui_browser_window_win32_directory_thread(void *userdata)
+{
+   win32_browser_thread_data_t *data = (win32_browser_thread_data_t *)userdata;
+   BROWSEINFOW bi;
+   LPITEMIDLIST pidl;
+   wchar_t display_name[MAX_PATH];
+   wchar_t path_wide[PATH_MAX_LENGTH];
+   wchar_t *title_wide = NULL;
+   bool ret            = false;
+
+   CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
+   memset(&bi, 0, sizeof(bi));
+   display_name[0]    = L'\0';
+   bi.hwndOwner        = NULL; /* non-modal, matches the file dialogs */
+   bi.pszDisplayName   = display_name;
+   bi.ulFlags          = BIF_NEWDIALOGSTYLE | BIF_RETURNONLYFSDIRS;
+
+   if (*data->title)
+   {
+      title_wide   = utf8_to_utf16_string_alloc(data->title);
+      bi.lpszTitle = title_wide;
+   }
+
+   pidl = SHBrowseForFolderW(&bi);
+
+   if (pidl)
+   {
+      if (SHGetPathFromIDListW(pidl, path_wide))
+      {
+         char *utf8 = utf16_to_utf8_string_alloc(path_wide);
+         if (utf8)
+         {
+            strlcpy(data->path, utf8, sizeof(data->path));
+            free(utf8);
+            ret = true;
+         }
+      }
+      CoTaskMemFree(pidl);
+   }
+
+   if (title_wide)
+      free(title_wide);
+
+   data->result = ret;
+
+   PostMessage(data->owner, ret
+         ? WM_BROWSER_OPEN_RESULT
+         : WM_BROWSER_CANCELLED,
+         (WPARAM)0, (LPARAM)data);
+
+   CoUninitialize();
+}
+
+static bool ui_browser_window_win32_directory(ui_browser_window_state_t *state)
+{
+   win32_browser_thread_data_t *td = NULL;
+   sthread_t *thread                = NULL;
+
+   td = (win32_browser_thread_data_t *)calloc(1, sizeof(*td));
+   if (!td)
+      return false;
+
+   if (state->title)
+      strlcpy(td->title, state->title, sizeof(td->title));
+
+   td->owner  = (HWND)state->window;
+   td->mode   = g_win32_browser_mode;
+   td->result = false;
+
+   thread = sthread_create(ui_browser_window_win32_directory_thread, td);
+   if (!thread)
+   {
+      free(td);
+      return false;
+   }
+
+   sthread_detach(thread);
+
+   /* Return false here: the caller must NOT act on state->result yet.
+    * The real result arrives via WM_BROWSER_OPEN_RESULT. */
+   return false;
+}
+#else
+/* Non-threaded fallback: blocks the main thread while the dialog is
+ * open, same trade-off as ui_browser_window_win32_core()'s fallback. */
+static bool ui_browser_window_win32_directory(ui_browser_window_state_t *state)
+{
+   BROWSEINFOW bi;
+   LPITEMIDLIST pidl;
+   wchar_t display_name[MAX_PATH];
+   wchar_t path_wide[PATH_MAX_LENGTH];
+   wchar_t *title_wide = NULL;
+   bool result         = false;
+
+   memset(&bi, 0, sizeof(bi));
+   display_name[0]     = L'\0';
+   bi.hwndOwner        = (HWND)state->window;
+   bi.pszDisplayName   = display_name;
+   bi.ulFlags          = BIF_NEWDIALOGSTYLE | BIF_RETURNONLYFSDIRS;
+
+   if (state->title && *state->title)
+   {
+      title_wide   = utf8_to_utf16_string_alloc(state->title);
+      bi.lpszTitle = title_wide;
+   }
+
+   pidl = SHBrowseForFolderW(&bi);
+
+   if (pidl)
+   {
+      if (SHGetPathFromIDListW(pidl, path_wide))
+      {
+         char *utf8 = utf16_to_utf8_string_alloc(path_wide);
+         if (utf8)
+         {
+            state->result = utf8;
+            result        = true;
+         }
+      }
+      CoTaskMemFree(pidl);
+   }
+
+   if (title_wide)
+      free(title_wide);
+
+   return result;
+}
+#endif /* HAVE_THREADS */
+
 static ui_browser_window_t ui_browser_window_win32 = {
    ui_browser_window_win32_open,
    ui_browser_window_win32_save,
+   ui_browser_window_win32_directory,
    "win32"
 };
 
@@ -927,6 +1072,60 @@ void win32_show_config_export_dialog(const char *suggested_name)
 #endif
 }
 #endif /* HAVE_MENU && HAVE_CONFIGFILE */
+
+#if defined(HAVE_MENU) && !defined(_XBOX)
+void win32_show_bulk_install_cores_dialog(void)
+{
+   const ui_browser_window_t *browser = ui_companion_driver_get_browser_window_ptr();
+   ui_browser_window_state_t browser_state;
+
+   if (!browser || !browser->directory)
+      return;
+
+   memset(&browser_state, 0, sizeof(browser_state));
+   browser_state.title  = strdup(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_SAF));
+   browser_state.window = main_window.hwnd;
+
+#ifdef HAVE_THREADS
+   /* Fire-and-forget: the dialog runs on a worker thread. The chosen
+    * folder is scanned from WM_BROWSER_OPEN_RESULT in win32_common.c. */
+   g_win32_browser_mode = WIN32_BROWSER_MODE_BULK_INSTALL_CORES;
+   browser->directory(&browser_state);
+#else
+   if (browser->directory(&browser_state) && browser_state.result)
+      menu_cbs_finish_bulk_install_scan(browser_state.result);
+   if (browser_state.result)
+      free(browser_state.result);
+#endif
+
+   free(browser_state.title);
+}
+
+void win32_show_bulk_backup_cores_dialog(void)
+{
+   const ui_browser_window_t *browser = ui_companion_driver_get_browser_window_ptr();
+   ui_browser_window_state_t browser_state;
+
+   if (!browser || !browser->directory)
+      return;
+
+   memset(&browser_state, 0, sizeof(browser_state));
+   browser_state.title  = strdup(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_SAF));
+   browser_state.window = main_window.hwnd;
+
+#ifdef HAVE_THREADS
+   g_win32_browser_mode = WIN32_BROWSER_MODE_BULK_BACKUP_CORES;
+   browser->directory(&browser_state);
+#else
+   if (browser->directory(&browser_state) && browser_state.result)
+      menu_cbs_finish_bulk_backup_scan(browser_state.result);
+   if (browser_state.result)
+      free(browser_state.result);
+#endif
+
+   free(browser_state.title);
+}
+#endif /* HAVE_MENU && !_XBOX */
 
 LRESULT win32_menu_loop(HWND owner, WPARAM wparam)
 {

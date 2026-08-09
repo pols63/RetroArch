@@ -137,7 +137,7 @@
 #define MENU_ENUM_LABEL_INPUT_SPLIT_JOYCON_STR "input_split_joycon"
 #define MENU_ENUM_LABEL_CORE_LIST_STR "load_core"
 #define MENU_ENUM_LABEL_SIDELOAD_CORE_LIST_STR "sideload_core"
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
 #define MENU_ENUM_LABEL_CORE_BULK_INSTALL_SAF_STR "core_bulk_install_saf"
 #define MENU_ENUM_LABEL_CORE_BULK_BACKUP_SAF_STR "core_bulk_backup_saf"
 #define MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST_STR "deferred_core_bulk_install_confirm_list"

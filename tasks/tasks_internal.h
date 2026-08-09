@@ -227,9 +227,10 @@ bool task_push_core_restore(const char *backup_path,
  * freed by the (asynchronous, cross-thread) task retirement path. */
 bool task_core_backup_find(const char *core_path);
 
-#if defined(ANDROID) && defined(HAVE_SAF)
-/* Bulk core install/backup via a user-selected SAF folder
- * (see docs/retroarch-android-bulk-cores.md).
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+/* Bulk core install/backup via a user-selected folder (Android: SAF
+ * tree; Windows: native folder dialog) - see
+ * docs/retroarch-android-bulk-cores.md.
  *
  * Usage pattern for both: call the '_scan' function synchronously
  * (e.g. right after the SAF tree picker returns) to populate a

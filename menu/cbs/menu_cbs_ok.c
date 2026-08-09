@@ -365,7 +365,7 @@ static enum msg_hash_enums action_ok_dl_to_enum(unsigned lbl)
          return MENU_ENUM_LABEL_DEFERRED_CORE_RESTORE_BACKUP_LIST;
       case ACTION_OK_DL_CORE_DELETE_BACKUP_LIST:
          return MENU_ENUM_LABEL_DEFERRED_CORE_DELETE_BACKUP_LIST;
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
       case ACTION_OK_DL_CORE_BULK_INSTALL_CONFIRM_LIST:
          return MENU_ENUM_LABEL_DEFERRED_CORE_BULK_INSTALL_CONFIRM_LIST;
       case ACTION_OK_DL_CORE_BULK_BACKUP_CONFIRM_LIST:
@@ -1903,7 +1903,7 @@ int generic_action_ok_displaylist_push(
          ACTION_OK_DL_LBL(action_ok_dl_to_enum(action_type), DISPLAYLIST_GENERIC);
          info_path          = label;
          break;
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
       case ACTION_OK_DL_CORE_BULK_INSTALL_CONFIRM_LIST:
       case ACTION_OK_DL_CORE_BULK_BACKUP_CONFIRM_LIST:
          ACTION_OK_DL_LBL(action_ok_dl_to_enum(action_type), DISPLAYLIST_GENERIC);
@@ -8958,22 +8958,82 @@ static int action_ok_core_delete_backup(const char *path,
    return 0;
 }
 
-#if defined(ANDROID) && defined(HAVE_SAF)
-/* Bulk core install/backup via a user-selected SAF folder.
- * See docs/retroarch-android-bulk-cores.md and
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+/* Bulk core install/backup via a user-selected folder (Android: SAF
+ * tree picker; Windows: native SHBrowseForFolder dialog). See
+ * docs/retroarch-android-bulk-cores.md and
  * tasks/task_core_bulk_install.c / tasks/task_core_bulk_backup.c. */
+
+/* Shared by both platforms once a folder has been picked: Android's
+ * safTreeAdded() (frontend/drivers/platform_unix.c) and Windows'
+ * WM_BROWSER_OPEN_RESULT handler (gfx/common/win32_common.c) both call
+ * these instead of duplicating the scan/confirm-push logic. */
+void menu_cbs_finish_bulk_install_scan(const char *folder)
+{
+   settings_t *settings = config_get_ptr();
+
+   if (!folder || !*folder)
+      return;
+
+   if (   core_bulk_install_scan(folder, settings->paths.directory_libretro) > 0
+       || core_bulk_install_pending_has_info_zip())
+      generic_action_ok_displaylist_push(
+            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_SAF),
+            NULL,
+            MENU_ENUM_LABEL_CORE_BULK_INSTALL_SAF_STR,
+            MENU_SETTING_ACTION,
+            0, 0,
+            ACTION_OK_DL_CORE_BULK_INSTALL_CONFIRM_LIST);
+   else
+      runloop_msg_queue_push(
+            "No core files found in that folder.",
+            STRLEN_CONST("No core files found in that folder."),
+            1, 100, true, NULL,
+            MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
+}
+
+void menu_cbs_finish_bulk_backup_scan(const char *folder)
+{
+   settings_t *settings = config_get_ptr();
+
+   if (!folder || !*folder)
+      return;
+
+   if (core_bulk_backup_scan(settings->paths.directory_libretro, folder) > 0)
+      generic_action_ok_displaylist_push(
+            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_SAF),
+            NULL,
+            MENU_ENUM_LABEL_CORE_BULK_BACKUP_SAF_STR,
+            MENU_SETTING_ACTION,
+            0, 0,
+            ACTION_OK_DL_CORE_BULK_BACKUP_CONFIRM_LIST);
+   else
+      runloop_msg_queue_push(
+            "No installed cores found to back up.",
+            STRLEN_CONST("No installed cores found to back up."),
+            1, 100, true, NULL,
+            MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_INFO);
+}
 
 static int action_ok_core_bulk_install_saf(const char *path,
       const char *label, unsigned type, size_t idx, size_t entry_idx)
 {
+#if defined(ANDROID) && defined(HAVE_SAF)
    android_show_saf_tree_picker_purpose(ANDROID_SAF_PURPOSE_BULK_INSTALL_CORES);
+#elif defined(_WIN32) && !defined(_XBOX)
+   win32_show_bulk_install_cores_dialog();
+#endif
    return 0;
 }
 
 static int action_ok_core_bulk_backup_saf(const char *path,
       const char *label, unsigned type, size_t idx, size_t entry_idx)
 {
+#if defined(ANDROID) && defined(HAVE_SAF)
    android_show_saf_tree_picker_purpose(ANDROID_SAF_PURPOSE_BACKUP_CORES);
+#elif defined(_WIN32) && !defined(_XBOX)
+   win32_show_bulk_backup_cores_dialog();
+#endif
    return 0;
 }
 
@@ -9787,7 +9847,7 @@ static int menu_cbs_init_bind_ok_compare_label(menu_file_list_cbs_t *cbs,
 #endif
          {MENU_ENUM_LABEL_CORE_RESTORE_BACKUP_LIST,            action_ok_push_core_restore_backup_list},
          {MENU_ENUM_LABEL_CORE_DELETE_BACKUP_LIST,             action_ok_push_core_delete_backup_list},
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
          {MENU_ENUM_LABEL_CORE_BULK_INSTALL_SAF,               action_ok_core_bulk_install_saf},
          {MENU_ENUM_LABEL_CORE_BULK_BACKUP_SAF,                action_ok_core_bulk_backup_saf},
          {MENU_ENUM_LABEL_CORE_BULK_INSTALL_CONFIRM,           action_ok_core_bulk_install_confirm},

@@ -1263,9 +1263,9 @@ static unsigned menu_displaylist_parse_core_backup_list(
    return count;
 }
 
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
 /* Single-batch confirmation screen for bulk core install from a
- * SAF folder (see docs/retroarch-android-bulk-cores.md). Rows are
+ * user-picked folder (see docs/retroarch-android-bulk-cores.md). Rows are
  * built from the pending scan populated by core_bulk_install_scan()
  * (tasks/task_core_bulk_install.c); the actual install only starts
  * if/when the user presses the trailing "Install All" row. */
@@ -1507,9 +1507,10 @@ static unsigned menu_displaylist_parse_core_manager_list(file_list_t *list,
          count++;
 #endif
 
-#if defined(ANDROID) && defined(HAVE_SAF)
-   /* Bulk core install/backup via a user-selected SAF folder
-    * (see docs/retroarch-android-bulk-cores.md) */
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+   /* Bulk core install/backup via a user-selected folder (Android: SAF
+    * tree picker; Windows: native folder dialog) - see
+    * docs/retroarch-android-bulk-cores.md */
    if (!kiosk_mode_enable)
    {
       if (menu_entries_append(list,
@@ -14638,7 +14639,7 @@ bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type,
                                  | MD_FLAG_NEED_PUSH
                                  | MD_FLAG_NEED_NAVIGATION_CLEAR;
             break;
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
          case DISPLAYLIST_CORE_BULK_INSTALL_CONFIRM_LIST:
             menu_entries_clear(info->list);
             count                = menu_displaylist_parse_core_bulk_install_confirm_list(info->list);

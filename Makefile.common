@@ -269,6 +269,8 @@ OBJ += \
        tasks/task_image.o \
        tasks/task_playlist_manager.o \
        tasks/task_core_backup.o \
+       tasks/task_core_bulk_install.o \
+       tasks/task_core_bulk_backup.o \
        $(LIBRETRO_COMM_DIR)/encodings/encoding_utf.o \
        $(LIBRETRO_COMM_DIR)/encodings/encoding_crc32.o \
        $(LIBRETRO_COMM_DIR)/encodings/encoding_base64.o

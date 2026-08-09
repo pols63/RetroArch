@@ -166,7 +166,7 @@ enum
    ACTION_OK_DL_CHEAT_FILE_APPEND,
    ACTION_OK_DL_CORE_LIST,
    ACTION_OK_DL_SIDELOAD_CORE_LIST,
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
    ACTION_OK_DL_CORE_BULK_INSTALL_CONFIRM_LIST,
    ACTION_OK_DL_CORE_BULK_BACKUP_CONFIRM_LIST,
 #endif
@@ -282,6 +282,16 @@ int generic_action_ok_displaylist_push(const char *path, const char *new_path,
  * browser (menu_cbs_ok.c) and the native file pickers on Windows, macOS
  * and Android (win32_common.c, ui_cocoa.m, platform_unix.c). */
 void menu_cbs_stage_config_import(const char *path);
+
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+/* Scans 'folder' for bulk core install/backup once a folder has been
+ * picked (Android SAF tree picker or Windows native folder dialog), and
+ * pushes the batch confirmation screen if anything was found. Shared by
+ * frontend/drivers/platform_unix.c's safTreeAdded() and
+ * gfx/common/win32_common.c's WM_BROWSER_OPEN_RESULT handler. */
+void menu_cbs_finish_bulk_install_scan(const char *folder);
+void menu_cbs_finish_bulk_backup_scan(const char *folder);
+#endif
 
 int generic_action_cheat_toggle(size_t idx, unsigned type, const char *label,
       bool wraparound);

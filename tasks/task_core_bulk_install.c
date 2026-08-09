@@ -13,8 +13,9 @@
  *  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Bulk core install from a user-selected SAF (Storage Access Framework)
- * folder on Android. See docs/retroarch-android-bulk-cores.md.
+/* Bulk core install from a user-selected folder - Storage Access
+ * Framework (SAF) tree on Android, native folder dialog on Windows. See
+ * docs/retroarch-android-bulk-cores.md.
  *
  * This deliberately does not reimplement core installation: every file
  * is installed via the existing task_push_core_restore() (tasks/task_core_backup.c),
@@ -39,14 +40,40 @@
 #include "../file_path_special.h"
 #include "tasks_internal.h"
 
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
 
+#ifdef ANDROID
 #include <vfs/vfs_implementation_saf.h>
+#endif
+
+/* core_bulk_join_source_path(): on Android 'tree' is a raw SAF tree
+ * identifier that must be turned into an openable "saf://..." VFS path
+ * via retro_vfs_path_join_saf(). Everywhere else 'tree' is already a
+ * plain filesystem folder (the native folder-picker dialog handed it
+ * over directly), so a normal path join is all that's needed. Mirrors
+ * retro_vfs_path_join_saf()'s contract: malloc'd, caller frees. */
+static char *core_bulk_join_source_path(const char *tree, const char *name)
+{
+#ifdef ANDROID
+   return retro_vfs_path_join_saf(tree, name);
+#else
+   char buf[PATH_MAX_LENGTH];
+   fill_pathname_join_special(buf, tree, name, sizeof(buf));
+   return strdup(buf);
+#endif
+}
 
 /* Matches the Android core filename convention used elsewhere in this
- * codebase (see play_feature_delivery.c and InstalledCoresReceiver.java) */
+ * codebase (see play_feature_delivery.c and InstalledCoresReceiver.java);
+ * on Windows cores are .dll, not .so. */
+#ifdef ANDROID
 #define CORE_BULK_SUFFIX_ANDROID  "_libretro_android.so"
 #define CORE_BULK_SUFFIX_PLAIN    "_libretro.so"
+#elif defined(_WIN32)
+#define CORE_BULK_SUFFIX_PLAIN    "_libretro.dll"
+#else
+#define CORE_BULK_SUFFIX_PLAIN    "_libretro.so"
+#endif
 
 typedef struct
 {
@@ -104,9 +131,13 @@ static bool core_bulk_filename_is_core(const char *name)
    if (!name || !*name)
       return false;
    len = strlen(name);
-   return    string_ends_with_size(name, CORE_BULK_SUFFIX_ANDROID,
+   return
+#ifdef CORE_BULK_SUFFIX_ANDROID
+             string_ends_with_size(name, CORE_BULK_SUFFIX_ANDROID,
                   len, STRLEN_CONST(CORE_BULK_SUFFIX_ANDROID))
-          || string_ends_with_size(name, CORE_BULK_SUFFIX_PLAIN,
+          ||
+#endif
+             string_ends_with_size(name, CORE_BULK_SUFFIX_PLAIN,
                   len, STRLEN_CONST(CORE_BULK_SUFFIX_PLAIN));
 }
 
@@ -142,7 +173,7 @@ size_t core_bulk_install_scan(const char *saf_tree, const char *dir_libretro)
    if (!saf_tree || !*saf_tree || !dir_libretro || !*dir_libretro)
       return 0;
 
-   if (!(root_path = retro_vfs_path_join_saf(saf_tree, "")))
+   if (!(root_path = core_bulk_join_source_path(saf_tree, "")))
       return 0;
 
    rdir = retro_opendir(root_path);
@@ -171,14 +202,14 @@ size_t core_bulk_install_scan(const char *saf_tree, const char *dir_libretro)
       if (string_is_equal_noncase(name, FILE_PATH_CORE_INFO_ZIP))
       {
          free(core_bulk_install_pending_info_zip);
-         core_bulk_install_pending_info_zip = retro_vfs_path_join_saf(saf_tree, name);
+         core_bulk_install_pending_info_zip = core_bulk_join_source_path(saf_tree, name);
          continue;
       }
 
       if (!core_bulk_filename_is_core(name))
          continue;
 
-      if (!(file_saf_path = retro_vfs_path_join_saf(saf_tree, name)))
+      if (!(file_saf_path = core_bulk_join_source_path(saf_tree, name)))
          continue;
 
       new_array = (core_bulk_install_entry_t*)realloc(core_bulk_install_pending,

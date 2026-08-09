@@ -13,8 +13,9 @@
  *  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Bulk core backup to a user-selected SAF (Storage Access Framework)
- * folder on Android. See docs/retroarch-android-bulk-cores.md.
+/* Bulk core backup to a user-selected folder - Storage Access Framework
+ * (SAF) tree on Android, native folder dialog on Windows. See
+ * docs/retroarch-android-bulk-cores.md.
  *
  * The source is always the app's private core directory (dir_libretro) -
  * never user-selectable, per the design constraints in that doc. This is
@@ -47,12 +48,35 @@
 #include "../file_path_special.h"
 #include "tasks_internal.h"
 
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
 
+#ifdef ANDROID
 #include <vfs/vfs_implementation_saf.h>
+#endif
 
+/* See core_bulk_join_source_path() in task_core_bulk_install.c for the
+ * same idea applied to the destination side: on Android 'tree' is a raw
+ * SAF tree identifier needing retro_vfs_path_join_saf(); everywhere else
+ * it's already a plain folder from the native folder-picker dialog. */
+static char *core_bulk_backup_join_dest_path(const char *tree, const char *name)
+{
+#ifdef ANDROID
+   return retro_vfs_path_join_saf(tree, name);
+#else
+   char buf[PATH_MAX_LENGTH];
+   fill_pathname_join_special(buf, tree, name, sizeof(buf));
+   return strdup(buf);
+#endif
+}
+
+#ifdef ANDROID
 #define CORE_BULK_BACKUP_SUFFIX_ANDROID "_libretro_android.so"
 #define CORE_BULK_BACKUP_SUFFIX_PLAIN   "_libretro.so"
+#elif defined(_WIN32)
+#define CORE_BULK_BACKUP_SUFFIX_PLAIN   "_libretro.dll"
+#else
+#define CORE_BULK_BACKUP_SUFFIX_PLAIN   "_libretro.so"
+#endif
 
 /* Same quantum/budget as task_core_backup.c's CORE_BACKUP_CHUNK_SIZE /
  * CORE_BACKUP_TICK_BUDGET_US - kept local since those are not exported. */
@@ -115,9 +139,13 @@ static bool core_bulk_backup_filename_is_core(const char *name)
    if (!name || !*name)
       return false;
    len = strlen(name);
-   return    string_ends_with_size(name, CORE_BULK_BACKUP_SUFFIX_ANDROID,
+   return
+#ifdef CORE_BULK_BACKUP_SUFFIX_ANDROID
+             string_ends_with_size(name, CORE_BULK_BACKUP_SUFFIX_ANDROID,
                   len, STRLEN_CONST(CORE_BULK_BACKUP_SUFFIX_ANDROID))
-          || string_ends_with_size(name, CORE_BULK_BACKUP_SUFFIX_PLAIN,
+          ||
+#endif
+             string_ends_with_size(name, CORE_BULK_BACKUP_SUFFIX_PLAIN,
                   len, STRLEN_CONST(CORE_BULK_BACKUP_SUFFIX_PLAIN));
 }
 
@@ -400,7 +428,7 @@ static bool core_bulk_backup_write_info_zip(const char *saf_dest_tree)
    if (!dir_info || !*dir_info || !(rdir = retro_opendir(dir_info)))
       return false;
 
-   dst_path = retro_vfs_path_join_saf(saf_dest_tree, FILE_PATH_CORE_INFO_ZIP);
+   dst_path = core_bulk_backup_join_dest_path(saf_dest_tree, FILE_PATH_CORE_INFO_ZIP);
    if (!dst_path)
    {
       retro_closedir(rdir);
@@ -570,7 +598,7 @@ static void task_core_bulk_backup_handler(retro_task_t *task)
          h->src_file = intfstream_open_file(src_path,
                RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
 
-         dst_path = retro_vfs_path_join_saf(h->saf_dest_tree, entry->filename);
+         dst_path = core_bulk_backup_join_dest_path(h->saf_dest_tree, entry->filename);
 
          if (dst_path)
          {

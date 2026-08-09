@@ -1061,7 +1061,7 @@ MSG_HASH(
    MENU_ENUM_SUBLABEL_SIDELOAD_CORE_LIST,
    "Install or restore a core from the 'Downloads' directory."
    )
-#if defined(ANDROID) && defined(HAVE_SAF)
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
 MSG_HASH(
    MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_SAF,
    "Install Cores from Folder (Bulk)"

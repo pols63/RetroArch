@@ -86,6 +86,12 @@ typedef struct ui_browser_window
 {
    bool (*open)(ui_browser_window_state_t *state);
    bool (*save)(ui_browser_window_state_t *state);
+   /* Picks a folder rather than a file (state->filters/filters_title/path
+    * are unused in this mode; result is the chosen folder). Used by
+    * "Install Cores from Folder (Bulk)" / "Backup Cores" - see
+    * menu_cbs_ok.c's action_ok_core_bulk_install_saf/_backup_saf. May be
+    * NULL on platforms/drivers that don't implement it yet. */
+   bool (*directory)(ui_browser_window_state_t *state);
    const char *ident;
 } ui_browser_window_t;
 
