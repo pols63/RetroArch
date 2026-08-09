@@ -2,9 +2,12 @@
 
 > **Nota**: este doc arrancó siendo específico de bulk-cores en Android,
 > pero el trabajo más reciente lo extendió a Windows y agregó una segunda
-> feature (rediseño de "Archivo de configuración"). Ver la última sección,
-> "Sesión: homologación a Windows...", para ese trabajo — el resto del
-> documento es el historial original, específico de Android.
+> feature (rediseño de "Archivo de configuración"). Ver las últimas dos
+> secciones — "Sesión: homologación a Windows..." (implementación) y
+> "Sesión: primera prueba real en dispositivo de Import/Export..." (tres
+> bugs encontrados y corregidos en la primera prueba manual) — para ese
+> trabajo; el resto del documento es el historial original, específico de
+> Android.
 
 Contexto para retomar esta tarea en otra sesión. Rama `dev-masscores`.
 Estado del código de la feature de bulk-cores: **implementación completa y
@@ -622,10 +625,125 @@ confirmación → task async), cambiando solo cómo se elige la carpeta:
 2. Probar manualmente en Windows: Configuration File → Importar/Exportar
    (con confirmación antes de sobreescribir), y Manage Cores → Install
    Cores from Folder (Bulk) / Backup Cores con una carpeta de `.dll`.
-3. Probar en Android (dispositivo real) que Configuration File
-   Import/Export funciona con el picker de documento único nuevo (no
-   confundir con el picker de árbol que ya usa bulk-cores) — no se probó
-   en dispositivo esta sesión, solo se confirmó que compila.
+3. ~~Probar en Android (dispositivo real) que Configuration File
+   Import/Export funciona~~ — hecho en la sesión siguiente (ver más abajo);
+   se encontraron y corrigieron tres bugs reales en el camino.
 4. Si en algún momento se retoma macOS: implementar
    `ui_browser_window_cocoa_directory` (hoy stub) para completar la
    homologación de bulk-cores en esa plataforma también.
+
+## Sesión: primera prueba real en dispositivo de Import/Export de Configuración (Android) — tres bugs encontrados y corregidos
+
+Primera prueba manual en dispositivo real (Android) de la Feature 1 de la
+sesión anterior (rediseño de "Archivo de configuración"), que hasta ahora
+solo tenía confirmado que compilaba. Aparecieron tres bugs reales,
+diagnosticados con ayuda de `adb logcat`/`adb shell run-as` (dispositivo
+conectado, `adb` en `D:\Android\Sdk\platform-tools`) y corregidos en el
+mismo dispositivo hasta confirmar. Los tres quedaron **commiteados**
+(`2d65f0e84b`, "importar exporta configuración") y **confirmados
+funcionando en dispositivo real por el usuario**.
+
+### Bug 1: "Export a Configuration File" generaba un archivo vacío
+
+**Causa raíz**: `action_ok_export_config()` (`menu/cbs/menu_cbs_ok.c`)
+escribe primero la configuración actual a un archivo de staging
+(`command_event_export_config(staging_path)`) y luego lanza el picker
+nativo de SAF (`android_show_saf_create_document_picker()`) para que Java
+copie ese staging file al destino elegido. El path de staging se
+construía con `settings->paths.directory_cache` — pero ese setting **no**
+es el `getCacheDir()` de Java (el sitio donde `RetroActivityCommon.java`
+buscaba el archivo a copiar): en Android, `directory_cache` por defecto
+apunta a `<almacenamiento externo>/RetroArch/temp`
+(`frontend/drivers/platform_unix.c`, `DEFAULT_DIR_CACHE = parent_path +
+"/temp"`), un directorio totalmente distinto del cache privado de la app.
+Nativo escribía el staging file en un lado, Java buscaba en otro — nunca
+coincidían, `staging.exists()` daba `false` en Java, se saltaba la copia,
+y el documento SAF (que Android ya crea vacío en cuanto el usuario elige
+ubicación/nombre en el diálogo del sistema, antes de que la app escriba
+nada) quedaba vacío. Diagnosticado sondeando en vivo con `adb shell
+run-as ... ls` el directorio de cache real de la app mientras el usuario
+exportaba: el archivo de staging nunca aparecía ahí.
+
+**Fix**: en vez de que Java reconstruya el path por su cuenta, nativo le
+pasa el path exacto que ya usó — `android_show_saf_create_document_picker()`
+ganó un segundo parámetro `staging_path` (`frontend/drivers/platform_unix.c/.h`),
+que se manda como segundo `jstring` a `requestCreateDocument(String,
+String)` (antes tenía un solo parámetro), que lo guarda en un campo de
+instancia (`mConfigExportStagingPath`) para que `onActivityResult()` lo
+use directamente en vez de `new File(getCacheDir(), "export_staging.cfg")`.
+
+### Bug 2: colisión de nombre al exportar dos veces al mismo lugar - `retroarch.cfg (1)` en vez de `retroarch (1).cfg`
+
+**Causa raíz**: `requestCreateDocument()` (`RetroActivityCommon.java`)
+lanzaba el intent `ACTION_CREATE_DOCUMENT` con `setType("*/*")`. Cuando el
+`DocumentsProvider` de destino (p. ej. `ExternalStorageProvider`, el que
+maneja "este dispositivo"/SD) resuelve colisiones de nombre vía
+`FileUtils.buildUniqueFile()` (AOSP), separa nombre/extensión comparando
+la extensión implícita del nombre pedido contra la del MIME type de la
+petición. `.cfg` no es una extensión registrada en `MimeTypeMap`, así que
+su MIME implícito cae a `application/octet-stream` — que **no** coincide
+con el `*/*` de la petición, así que el provider no logra separar
+"retroarch" de ".cfg" y en un conflicto le pega el sufijo " (1)" al
+string completo sin tocar la extensión.
+
+**Fix**: cambiar el MIME type de la petición a `"application/octet-stream"`
+en vez de `"*/*"` — con eso sí coincide con el MIME implícito que el
+provider calcula para `.cfg`, entonces separa correctamente nombre/extensión
+y las colisiones se renombran como `retroarch (1).cfg`. Solo aplica al
+flujo de exportar (`ACTION_CREATE_DOCUMENT`); el de importar
+(`ACTION_OPEN_DOCUMENT`, `requestOpenDocument()`) sigue con `*/*` a
+propósito, porque ahí sí se quiere aceptar cualquier archivo sin importar
+su extensión.
+
+### Bug 3: tras importar una configuración, los cambios posteriores no sobrevivían a un reinicio
+
+Reportado por el usuario con un caso concreto: cambió el hotkey de
+activación de teclas rápidas a "Button 4" (confirmado funcionando en
+vivo), fue a "Archivo de configuración" → "Guardar configuración actual"
+— el toast de éxito mostró una ruta rarísima:
+`/data/user/0/com.retroarch.aarch64/cache/import_staging.cfg`. Al cerrar
+y reabrir RetroArch, el hotkey volvía a estar vacío.
+
+**Causa raíz**: `action_ok_config_import_confirm()` (tras confirmar
+"Import and Overwrite") marca `MENU_ST_FLAG_PENDING_CONFIG_REPLACE`, que
+`runloop_check_state()` (`runloop.c`) resuelve llamando a
+`config_replace(config_save_on_exit, menu_st->pending_config_path)` — una
+función preexistente (no de este fork) que, además de cargar los valores
+del archivo nuevo, hace incondicionalmente
+`path_set(RARCH_PATH_CONFIG, path)`, es decir: el archivo importado se
+vuelve "el" config activo para siempre (mismo comportamiento que el viejo
+"Load Configuration", intencional para Windows/macOS/navegador interno,
+donde `path` es un archivo real que el usuario efectivamente eligió y
+posee). Pero en Android, `path` para el flujo de importar SAF es
+`import_staging.cfg` — una copia temporal en el cache privado de la app
+que Java borra apenas termina de copiarla (`RetroActivityCommon.java`,
+`copySafDocumentToCache()`). Con `RARCH_PATH_CONFIG` apuntando ahí, todo
+guardado posterior ("Guardar configuración actual") escribía sobre ese
+archivo fantasma en vez del `retroarch.cfg` real — de ahí el toast con la
+ruta rara, y de ahí que el hotkey se "perdiera": nunca llegó a
+persistirse en el archivo que se recarga al reiniciar la app.
+
+**Fix**: se agregó un flag `pending_config_path_is_temp` (`struct
+menu_state`, `menu/menu_driver.h`) y un segundo parámetro `is_temporary`
+a `menu_cbs_stage_config_import()` (`menu/menu_cbs.h` /
+`menu/cbs/menu_cbs_ok.c`) — `true` solo para el llamador de Android
+(`safConfigImportReady()`, `frontend/drivers/platform_unix.c`), `false`
+para los otros tres llamadores (Windows `ui_win32.c`/`win32_common.c`,
+macOS y el navegador interno de `menu_cbs_ok.c`), que sí pasan una ruta
+real. En `runloop.c`, `runloop_check_state()` ahora, cuando ese flag está
+activo: guarda `RARCH_PATH_CONFIG` original ANTES de llamar a
+`config_replace()`, deja que `config_replace()` cargue los valores del
+staging file en memoria como siempre (eso ya funcionaba bien — el hotkey
+sí se aplicaba en caliente), y **después** restaura `RARCH_PATH_CONFIG` a
+la ruta original — así que guardados posteriores vuelven a apuntar al
+`retroarch.cfg` real. Es seguro hacer la restauración justo después de
+`config_replace()` porque, pese al nombre `task_push_start_dummy_core()`,
+la carga de la config es síncrona (bloqueante) dentro de esa misma
+llamada, no una tarea diferida — confirmado leyendo
+`tasks/task_content.c:task_push_start_dummy_core()`.
+
+**Estado: confirmado en dispositivo real por el usuario**, ciclo completo
+(importar → cambiar hotkey → guardar → cerrar → reabrir → hotkey
+persiste). Sin pendientes de esta parte. Sigue pendiente de esta rama de
+trabajo, sin cambios: la compilación/prueba en un Windows real (ítems 1-2
+de "Próximos pasos" arriba).
