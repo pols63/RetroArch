@@ -45,19 +45,48 @@ sola vez:
 
 ```bash
 git remote add upstream https://github.com/libretro/RetroArch.git
-git fetch upstream
+git fetch upstream --tags
 ```
 
-Traer los cambios a la `master` local (al ser un mirror sin commits
-propios, esto siempre es fast-forward):
+### Decisión: ¿traer todo `master` o solo el último release?
 
-```bash
-git checkout master
-git merge --ff-only upstream/master
-```
+`master` de `libretro/RetroArch` es el tronco de desarrollo continuo, no
+una rama que solo recibe features terminadas — verificado en esta sesión:
+al último tag (`v1.22.2`, 2025-11-20) le siguen **4191 commits** en
+`master` sin un nuevo release estable en casi 9 meses. Ahí caen fixes,
+refactors en progreso y features que a veces se completan en varios
+commits a lo largo de semanas. Lo que sí pasó por un ciclo de testing más
+amplio antes de marcarse como terminado son los **tags**.
+
+Dos caminos, ninguno incorrecto — es una decisión de cuánto riesgo asumir
+en cada sync:
+
+- **Opción A — traer todo `master`** (lo que se hizo esta vez). Da acceso
+  inmediato a todo lo nuevo, pero incluye código que no pasó por un ciclo
+  de release completo — mayor probabilidad de tropezar con algo
+  a medio terminar o con una regresión no detectada todavía.
+  ```bash
+  git checkout master
+  git merge --ff-only upstream/master
+  ```
+- **Opción B — traer solo el último tag estable**. Más conservador: solo
+  se incorpora lo que el equipo de RetroArch ya marcó como release. Entre
+  syncs se pierde acceso a los commits más recientes de `master`, pero
+  eso se recupera en el siguiente sync cuando salga el próximo tag.
+  ```bash
+  git tag --sort=-creatordate | head -5   # ver el tag más reciente
+  git checkout master
+  git merge --ff-only v1.22.2             # reemplazar por el tag vigente al momento del sync
+  ```
 
 Si por algún motivo `--ff-only` falla (algo le agregó un commit propio a
 `master`), parar y revisar antes de forzar nada.
+
+**Nota**: por ahora se está usando la Opción A (traer todo `master`,
+riesgo asumido conscientemente). Para el próximo release, evaluar cambiar
+a la Opción B si en este sync aparece algo inestable atribuible a un
+commit sin release, o simplemente por preferir más estabilidad a costa de
+ir un poco más atrás en el tiempo.
 
 ## 2. Mergear `master` en `dev-masscores`
 
