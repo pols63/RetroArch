@@ -21,11 +21,13 @@ Diagnóstico de partida (verificado en esta sesión):
   versión (ver paso 4 — es automático, no hace falta tocar código para
   que se refresquen).
 - `media/assets` **no está versionada en este repo** (gitignored a
-  propósito, es contenido binario pesado) — se puebla localmente corriendo
-  `./fetch-submodules.sh` desde la raíz. Verificado: en este entorno la
-  carpeta ya existe con contenido pero **no es un clon git real** (no
-  tiene `.git` propio), así que no se puede actualizar con `git pull`
-  directo — ver paso 4.
+  propósito vía `.gitignore:159` — `/media/assets/`, es contenido binario
+  pesado). Un repo git anidado dentro de otro es válido: al estar
+  ignorada, el repo padre nunca desciende a mirar su `.git` interno. Ya se
+  convirtió en un **clon git real** de `libretro/retroarch-assets`
+  (`git clone` directo, reemplazando la copia plana que había antes de
+  `fetch-submodules.sh`), así que de acá en adelante se actualiza con
+  `git -C media/assets pull` — ver paso 3.
 
 ## 0. Preparación
 
@@ -129,41 +131,38 @@ upstream vs. cuál es la línea agregada por el fork, y combinar ambos
 
 ## 3. Actualizar los assets embebidos (`media/assets`)
 
-Como `media/assets` en este entorno no es un clon git real, la forma más
-simple y segura de actualizarla es re-descargarla entera:
+`media/assets` ya es un clon git real de `libretro/retroarch-assets`
+(convertido en la sesión del 2026-08-09). Actualizarla es solo:
 
 ```bash
-mv media/assets media/assets.bak   # por si acaso; borrar al final si todo salió bien
-./fetch-submodules.sh
+git -C media/assets pull
 ```
 
-Esto re-clona `libretro/retroarch-assets` (y de paso refresca
-`media/shaders_cg`, `media/overlays`, `media/autoconfig`,
-`media/libretrodb` — ninguno de esos otros cuatro está declarado en los
-`sourceDirs` de Android, así que no afectan lo que va embebido en el APK,
-pero no está de más tenerlos al día si se usan en otras plataformas).
-
-Verificar que quedó bien poblada antes de borrar el backup:
+Verificar que trajo algo y que sigue teniendo la estructura esperada:
 
 ```bash
-ls media/assets   # debería verse: branding ctr fonts glui nxrgui ozone pkg rgui scripts sounds src switch wallpapers xmb COPYING Makefile README.md configure
-rm -rf media/assets.bak
+git -C media/assets log -1 --format="%H %ai %s"
+ls media/assets   # branding ctr fonts glui nxrgui ozone pkg rgui scripts sounds src switch wallpapers xmb COPYING Makefile README.md configure
 ```
 
-**Nota para el futuro**: si querés poder actualizar esta carpeta con
-`git pull` en vez de re-clonar cada vez, convertila en un clon real una
-sola vez:
+Al estar declarada en `.gitignore` (`/media/assets/`), el repo principal
+nunca ve el `.git` interno de este clon — no hay conflicto entre ambos
+repos ni riesgo de que `git add -A` en la raíz intente tocarla.
+
+Si en algún momento quedara corrupta o hay que empezar de cero, el camino
+es recrearla igual que la primera vez:
 
 ```bash
 rm -rf media/assets
 git clone https://github.com/libretro/retroarch-assets.git media/assets
 ```
 
-A partir de ahí, actualizar assets en el futuro es solo:
-
-```bash
-git -C media/assets pull
-```
+(Alternativa de emergencia si no se quiere un clon real: `./fetch-submodules.sh`
+desde la raíz re-descarga `media/assets` como copia plana — junto con
+`media/shaders_cg`, `media/overlays`, `media/autoconfig`,
+`media/libretrodb`, ninguno de los cuales está declarado en los
+`sourceDirs` de Android, así que no afectan lo que va embebido en el APK.
+Requiere que la carpeta destino esté vacía o no exista.)
 
 ## 4. Confirmar que el re-empaquetado es automático
 
