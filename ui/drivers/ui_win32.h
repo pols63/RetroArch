@@ -61,7 +61,8 @@ enum win32_browser_mode
 {
    WIN32_BROWSER_MODE_LOAD_CONTENT = 0,
    WIN32_BROWSER_MODE_LOAD_CORE,
-   WIN32_BROWSER_MODE_SAVE
+   WIN32_BROWSER_MODE_LOAD_CONFIG,
+   WIN32_BROWSER_MODE_SAVE_CONFIG
 };
 
 typedef struct
@@ -136,6 +137,18 @@ LRESULT win32_menu_loop(HWND owner, WPARAM wparam);
 #ifdef HAVE_MENU
 void win32_localize_menu(HMENU menu);
 void win32_menubar_rebuild(void);
+
+#ifdef HAVE_CONFIGFILE
+/* "Import a Configuration File" / "Export a Configuration File" (Main
+ * Menu > Configuration File) on Windows: shows a native
+ * GetOpenFileName/GetSaveFileName dialog instead of RetroArch's own
+ * file browser. See menu_cbs_ok.c's action_ok_import_config /
+ * action_ok_export_config for the cross-platform dispatch, and
+ * gfx/common/win32_common.c's WM_BROWSER_OPEN_RESULT handler for how
+ * the (threaded, asynchronous) result is applied. */
+void win32_show_config_import_dialog(void);
+void win32_show_config_export_dialog(const char *suggested_name);
+#endif
 #endif
 #ifndef __WINRT__
 HMENU win32_resources_create_menu(void);

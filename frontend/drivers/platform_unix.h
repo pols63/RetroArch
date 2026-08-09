@@ -208,6 +208,8 @@ struct android_app
 #ifdef HAVE_SAF
    jmethodID requestOpenDocumentTree;
    jmethodID getPersistedSafTrees;
+   jmethodID requestOpenDocument;
+   jmethodID requestCreateDocument;
    bool have_saf;
 #endif
 };
@@ -416,6 +418,16 @@ enum android_saf_purpose
 
 void android_show_saf_tree_picker(void);
 void android_show_saf_tree_picker_purpose(enum android_saf_purpose purpose);
+
+/* Single-document pickers for "Import a Configuration File" / "Export a
+ * Configuration File" (Main Menu > Configuration File) - unlike the tree
+ * picker above these pick/create exactly one document, whose content is
+ * streamed through a private cache file on the Java side
+ * (RetroActivityCommon.copySafDocumentToCache()/onActivityResult()) so
+ * native code only ever deals with plain filesystem paths. See
+ * menu_cbs_ok.c's action_ok_import_config / action_ok_export_config. */
+void android_show_saf_open_document_picker(void);
+void android_show_saf_create_document_picker(const char *suggested_name);
 #endif
 
 #endif

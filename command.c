@@ -2497,6 +2497,41 @@ void command_event_save_current_config(enum override_type type)
    }
 }
 
+#ifdef HAVE_CONFIGFILE
+/* Writes the current in-memory settings to an arbitrary path chosen via
+ * an OS-native file picker or (as a fallback) RetroArch's own on-screen
+ * keyboard ("Export a Configuration File"). Unlike
+ * command_event_save_current_config()/CMD_EVENT_MENU_SAVE_AS_CONFIG, this
+ * does NOT call path_set(RARCH_PATH_CONFIG, ...) - exporting generates a
+ * file at the chosen location without changing which configuration is
+ * "active", since that's the behavior the feature is documented to have. */
+void command_event_export_config(const char *config_path)
+{
+   char msg[256];
+   size_t _len;
+
+   if (!config_path || !*config_path)
+      return;
+
+   if (config_save_file(config_path))
+   {
+      _len = snprintf(msg, sizeof(msg), "%s \"%s\".",
+            msg_hash_to_str(MSG_SAVED_NEW_CONFIG_TO), config_path);
+      RARCH_LOG("[Config] %s\n", msg);
+      runloop_msg_queue_push(msg, _len, 1, 180, true, NULL,
+            MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_SUCCESS);
+   }
+   else
+   {
+      _len = snprintf(msg, sizeof(msg), "%s \"%s\".",
+            msg_hash_to_str(MSG_FAILED_SAVING_CONFIG_TO), config_path);
+      RARCH_ERR("[Config] %s\n", msg);
+      runloop_msg_queue_push(msg, _len, 1, 180, true, NULL,
+            MESSAGE_QUEUE_ICON_DEFAULT, MESSAGE_QUEUE_CATEGORY_ERROR);
+   }
+}
+#endif
+
 void command_event_remove_current_config(enum override_type type)
 {
    runloop_state_t *runloop_st     = runloop_state_get_ptr();

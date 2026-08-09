@@ -703,6 +703,38 @@ void android_show_saf_tree_picker(void)
 {
    android_show_saf_tree_picker_purpose(ANDROID_SAF_PURPOSE_BROWSE);
 }
+
+void android_show_saf_open_document_picker(void)
+{
+   JNIEnv *env;
+
+   if (!g_android || !g_android->have_saf)
+      return;
+
+   env = jni_thread_getenv();
+   if (!env)
+      return;
+
+   CALL_VOID_METHOD(env, g_android->activity->clazz, g_android->requestOpenDocument);
+}
+
+void android_show_saf_create_document_picker(const char *suggested_name)
+{
+   JNIEnv *env;
+   jstring name_jni;
+
+   if (!g_android || !g_android->have_saf)
+      return;
+
+   env = jni_thread_getenv();
+   if (!env)
+      return;
+
+   name_jni = (*env)->NewStringUTF(env, suggested_name ? suggested_name : "retroarch.cfg");
+   CALL_VOID_METHOD_PARAM(env, g_android->activity->clazz,
+         g_android->requestCreateDocument, name_jni);
+   (*env)->DeleteLocalRef(env, name_jni);
+}
 #endif
 
 /*
@@ -797,6 +829,39 @@ JNIEXPORT void JNICALL Java_com_retroarch_browser_retroactivity_RetroActivityCom
    }
 
    (*env)->ReleaseStringUTFChars(env, tree_obj, tree);
+   if ((*env)->ExceptionOccurred(env))
+   {
+      (*env)->ExceptionDescribe(env);
+      (*env)->ExceptionClear(env);
+   }
+#endif
+}
+
+/*
+ * Class:     com_retroarch_browser_retroactivity_RetroActivityCommon
+ * Method:    safConfigImportReady
+ * Signature: (Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_com_retroarch_browser_retroactivity_RetroActivityCommon_safConfigImportReady
+      (JNIEnv *env, jobject this_obj, jstring temp_path_obj)
+{
+#ifdef HAVE_SAF
+   const char *temp_path = (*env)->GetStringUTFChars(env, temp_path_obj, NULL);
+
+   if ((*env)->ExceptionOccurred(env))
+   {
+      (*env)->ExceptionDescribe(env);
+      (*env)->ExceptionClear(env);
+      return;
+   }
+
+   /* temp_path is already a plain filesystem path (see
+    * RetroActivityCommon.copySafDocumentToCache()), so this goes through
+    * the exact same confirmation flow as Windows/macOS/the internal file
+    * browser - see menu_cbs_ok.c. */
+   menu_cbs_stage_config_import(temp_path);
+
+   (*env)->ReleaseStringUTFChars(env, temp_path_obj, temp_path);
    if ((*env)->ExceptionOccurred(env))
    {
       (*env)->ExceptionDescribe(env);
@@ -2445,6 +2510,12 @@ static void frontend_unix_init(void *data)
 
    GET_METHOD_ID(env, android_app->getPersistedSafTrees, class,
          "getPersistedSafTrees", "()[Ljava/lang/String;");
+
+   GET_METHOD_ID(env, android_app->requestOpenDocument, class,
+         "requestOpenDocument", "()V");
+
+   GET_METHOD_ID(env, android_app->requestCreateDocument, class,
+         "requestCreateDocument", "(Ljava/lang/String;)V");
 
    android_app->have_saf = retro_vfs_init_saf(jni_thread_getenv, android_app->activity->clazz);
 #endif

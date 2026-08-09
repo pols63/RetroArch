@@ -69,7 +69,9 @@
 
 #ifdef HAVE_MENU
 #include "../../menu/menu_driver.h"
+#include "../../menu/menu_cbs.h"
 #endif
+#include "../../command.h"
 
 #include <encodings/utf.h>
 
@@ -665,6 +667,14 @@ static LRESULT CALLBACK wnd_proc_common(
                   case WIN32_BROWSER_MODE_LOAD_CONTENT:
                      win32_load_content_from_gui(td->path);
                      break;
+#if defined(HAVE_MENU) && defined(HAVE_CONFIGFILE)
+                  case WIN32_BROWSER_MODE_LOAD_CONFIG:
+                     menu_cbs_stage_config_import(td->path);
+                     break;
+                  case WIN32_BROWSER_MODE_SAVE_CONFIG:
+                     command_event_export_config(td->path);
+                     break;
+#endif
                   default:
                      break;
                }

@@ -66,6 +66,10 @@
 #include "../../core_info.h"
 #include "../../tasks/task_content.h"
 #include "../../input/input_keymaps.h"
+#include "../../command.h"
+#ifdef HAVE_MENU
+#include "../../menu/menu_cbs.h"
+#endif
 #include <shellapi.h>
 #include <ctype.h>
 
@@ -306,12 +310,17 @@ static void ui_browser_window_win32_thread(void *userdata)
    ofn.nMaxFileTitle     = 0;
    ofn.lpstrInitialDir   = data->startdir;
    ofn.lpstrTitle        = data->title;
-   ofn.Flags             =   OFN_FILEMUSTEXIST
+   /* OFN_FILEMUSTEXIST only makes sense for an Open dialog; a Save
+    * dialog needs OFN_OVERWRITEPROMPT instead so picking an existing
+    * filename asks for confirmation rather than being rejected. */
+   ofn.Flags             =   (data->is_save ? OFN_OVERWRITEPROMPT : OFN_FILEMUSTEXIST)
                            | OFN_HIDEREADONLY
                            | OFN_NOCHANGEDIR;
    ofn.nFileOffset       = 0;
    ofn.nFileExtension    = 0;
-   ofn.lpstrDefExt       = "";
+   ofn.lpstrDefExt       = (data->mode == WIN32_BROWSER_MODE_LOAD_CONFIG
+                              || data->mode == WIN32_BROWSER_MODE_SAVE_CONFIG)
+                           ? "cfg" : "";
    ofn.lCustData         = 0;
    ofn.lpfnHook          = NULL;
    ofn.lpTemplateName    = NULL;
@@ -795,6 +804,129 @@ static bool win32_browser(
    return result;
 }
 #endif /* HAVE_THREADS */
+
+#ifdef HAVE_THREADS
+/* Same shape as win32_browser() above, but calls browser->save() (a
+ * GetSaveFileName dialog) instead of browser->open() - win32_browser()
+ * itself always opens, even for WIN32_BROWSER_MODE_SAVE_CONFIG, since
+ * nothing called browser->save() before this feature existed. */
+static bool win32_browser_save(
+      HWND owner,
+      char *filename,
+      size_t filename_size,
+      const char *extensions,
+      const char *title,
+      const char *initial_dir,
+      enum win32_browser_mode mode)
+{
+   bool result = false;
+   const ui_browser_window_t *browser =
+      ui_companion_driver_get_browser_window_ptr();
+
+   if (browser)
+   {
+      ui_browser_window_state_t browser_state;
+      char new_title[PATH_MAX];
+      char new_file[PATH_MAX_LENGTH];
+      char new_dir[DIR_MAX_LENGTH];
+
+      new_title[0] = '\0';
+      new_file[0]  = '\0';
+      new_dir[0]   = '\0';
+
+      if (title && *title)
+         strlcpy(new_title, title, sizeof(new_title));
+      if (filename && *filename)
+         strlcpy(new_file, filename, sizeof(new_file));
+      if (initial_dir && *initial_dir)
+         strlcpy(new_dir, initial_dir, sizeof(new_dir));
+
+      browser_state.filters  = (char*)extensions;
+      browser_state.title    = new_title;
+      browser_state.startdir = new_dir;
+      browser_state.path     = new_file;
+      browser_state.window   = owner;
+
+      g_win32_browser_mode   = mode;
+
+      result = browser->save(&browser_state);
+
+      if (filename && browser_state.path)
+         strlcpy(filename, browser_state.path, filename_size);
+   }
+
+   return result;
+}
+#endif /* HAVE_THREADS */
+
+#if defined(HAVE_MENU) && defined(HAVE_CONFIGFILE)
+void win32_show_config_import_dialog(void)
+{
+   settings_t *settings              = config_get_ptr();
+   char win32_file[PATH_MAX_LENGTH]  = {0};
+   const char *extensions            =
+         "Configuration Files (*.cfg)\0*.cfg\0All Files (*.*)\0*.*\0\0";
+   const char *title                 =
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_IMPORT_CONFIG);
+   const char *initial_dir           = settings->paths.directory_menu_config;
+
+#ifdef HAVE_THREADS
+   /* Fire-and-forget: the dialog runs on a worker thread. The chosen
+    * path is staged from WM_BROWSER_OPEN_RESULT in win32_common.c. */
+   win32_browser(main_window.hwnd, win32_file, sizeof(win32_file),
+         extensions, title, initial_dir, WIN32_BROWSER_MODE_LOAD_CONFIG);
+#else
+   if (win32_browser(main_window.hwnd, win32_file, sizeof(win32_file),
+            extensions, title, initial_dir))
+      menu_cbs_stage_config_import(win32_file);
+#endif
+}
+
+void win32_show_config_export_dialog(const char *suggested_name)
+{
+   settings_t *settings              = config_get_ptr();
+   char win32_file[PATH_MAX_LENGTH]  = {0};
+   const char *extensions            =
+         "Configuration Files (*.cfg)\0*.cfg\0All Files (*.*)\0*.*\0\0";
+   const char *title                 =
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_EXPORT_CONFIG);
+   const char *initial_dir           = settings->paths.directory_menu_config;
+
+   if (suggested_name && *suggested_name)
+      strlcpy(win32_file, suggested_name, sizeof(win32_file));
+
+#ifdef HAVE_THREADS
+   /* Fire-and-forget: WM_BROWSER_OPEN_RESULT (win32_common.c) exports
+    * to the chosen path once the worker thread's dialog closes. */
+   win32_browser_save(main_window.hwnd, win32_file, sizeof(win32_file),
+         extensions, title, initial_dir, WIN32_BROWSER_MODE_SAVE_CONFIG);
+#else
+   {
+      const ui_browser_window_t *browser =
+         ui_companion_driver_get_browser_window_ptr();
+
+      if (browser)
+      {
+         ui_browser_window_state_t browser_state;
+         char new_dir[DIR_MAX_LENGTH];
+
+         new_dir[0] = '\0';
+         if (initial_dir && *initial_dir)
+            strlcpy(new_dir, initial_dir, sizeof(new_dir));
+
+         browser_state.filters  = (char*)extensions;
+         browser_state.title    = (char*)title;
+         browser_state.startdir = new_dir;
+         browser_state.path     = win32_file;
+         browser_state.window   = main_window.hwnd;
+
+         if (browser->save(&browser_state) && *win32_file)
+            command_event_export_config(win32_file);
+      }
+   }
+#endif
+}
+#endif /* HAVE_MENU && HAVE_CONFIGFILE */
 
 LRESULT win32_menu_loop(HWND owner, WPARAM wparam)
 {

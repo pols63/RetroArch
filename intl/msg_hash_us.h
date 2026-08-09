@@ -1103,6 +1103,34 @@ MSG_HASH(
    "Cancel"
    )
 #endif
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_IMPORT_CONFIG,
+   "Import a Configuration File"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_IMPORT_CONFIG,
+   "Choose an existing configuration file using the system's file picker. This will overwrite the current configuration."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_EXPORT_CONFIG,
+   "Export a Configuration File"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_EXPORT_CONFIG,
+   "Save the current configuration to a location you choose using the system's file picker."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CONFIG_IMPORT_CONFIRM,
+   "Import and Overwrite"
+   )
+MSG_HASH(
+   MENU_ENUM_SUBLABEL_CONFIG_IMPORT_CONFIRM,
+   "Load the chosen configuration file, replacing the current configuration."
+   )
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_CONFIG_IMPORT_CANCEL,
+   "Cancel"
+   )
 
 /* Main Menu > Load Content */
 

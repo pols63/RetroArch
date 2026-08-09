@@ -59,6 +59,7 @@
 #include "../../core.h"
 #include "../../menu/menu_cbs.h"
 #include "../../menu/menu_displaylist.h"
+#include "../../command.h"
 #include "../../retroarch.h"
 #include "../../tasks/task_content.h"
 #include "../../tasks/tasks_internal.h"
@@ -231,7 +232,39 @@ static bool ui_browser_window_cocoa_open(ui_browser_window_state_t *state)
 
 static bool ui_browser_window_cocoa_save(ui_browser_window_state_t *state)
 {
-   return false;
+   NSSavePanel *panel = [NSSavePanel savePanel];
+
+   if (state->filters && *state->filters)
+   {
+#ifdef HAVE_COCOA_METAL
+      [panel setAllowedFileTypes:@[BOXSTRING(state->filters)]];
+#else
+      /* See the matching comment in ui_browser_window_cocoa_open() above
+       * about MRC ownership of this array. */
+      NSArray *filetypes = [[NSArray alloc] initWithObjects:BOXSTRING(state->filters), nil];
+      [panel setAllowedFileTypes:filetypes];
+      RARCH_RELEASE(filetypes);
+#endif
+   }
+
+   panel.title = NSLocalizedString(BOXSTRING(state->title), BOXSTRING("save panel"));
+   if (state->startdir && *state->startdir)
+      panel.directoryURL = [NSURL fileURLWithPath:BOXSTRING(state->startdir)];
+   /* state->path doubles as the suggested filename input here, mirroring
+    * how the win32 backend treats its 'path' field as an in/out buffer. */
+   if (state->path && *state->path)
+      panel.nameFieldStringValue = BOXSTRING(state->path);
+
+   if ([panel runModal] != 1)
+      return false;
+
+   {
+      NSURL *url           = (NSURL*)panel.URL;
+      const char *res_path = [url.path UTF8String];
+      state->result        = strdup(res_path);
+   }
+
+   return true;
 }
 
 static ui_browser_window_t ui_browser_window_cocoa = {
@@ -1236,6 +1269,80 @@ static void open_document_handler(
 }
 
 @end
+
+/* "Import a Configuration File" / "Export a Configuration File" (Main
+ * Menu > Configuration File) on macOS: shows a native NSOpenPanel /
+ * NSSavePanel instead of RetroArch's own file browser. Unlike the win32
+ * backend these run modally on the calling thread and return
+ * synchronously, so menu_cbs_ok.c's action_ok_import_config /
+ * action_ok_export_config can act on the result immediately - no
+ * WM_BROWSER_OPEN_RESULT-style callback needed. */
+bool cocoa_show_config_import_dialog(char *out_path, size_t len)
+{
+   const ui_browser_window_t *browser =
+      ui_companion_driver_get_browser_window_ptr();
+   bool result                        = false;
+
+   if (browser)
+   {
+      ui_browser_window_state_t browser_state = {NULL};
+      settings_t *settings                    = config_get_ptr();
+
+      browser_state.title    = strdup(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_IMPORT_CONFIG));
+      browser_state.startdir = strdup(settings->paths.directory_menu_config);
+      browser_state.filters  = strdup("cfg");
+      browser_state.filters_title = strdup("cfg");
+
+      if (browser->open(&browser_state) && browser_state.result && *browser_state.result)
+      {
+         strlcpy(out_path, browser_state.result, len);
+         result = true;
+      }
+
+      free(browser_state.title);
+      free(browser_state.startdir);
+      free(browser_state.filters);
+      free(browser_state.filters_title);
+      if (browser_state.result)
+         free(browser_state.result);
+   }
+
+   return result;
+}
+
+bool cocoa_show_config_export_dialog(char *out_path, size_t len,
+      const char *suggested_name)
+{
+   const ui_browser_window_t *browser =
+      ui_companion_driver_get_browser_window_ptr();
+   bool result                        = false;
+
+   if (browser)
+   {
+      ui_browser_window_state_t browser_state = {NULL};
+      settings_t *settings                    = config_get_ptr();
+
+      browser_state.title    = strdup(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_EXPORT_CONFIG));
+      browser_state.startdir = strdup(settings->paths.directory_menu_config);
+      browser_state.filters  = strdup("cfg");
+      browser_state.path     = strdup(suggested_name ? suggested_name : "retroarch.cfg");
+
+      if (browser->save(&browser_state) && browser_state.result && *browser_state.result)
+      {
+         strlcpy(out_path, browser_state.result, len);
+         result = true;
+      }
+
+      free(browser_state.title);
+      free(browser_state.startdir);
+      free(browser_state.filters);
+      free(browser_state.path);
+      if (browser_state.result)
+         free(browser_state.result);
+   }
+
+   return result;
+}
 
 #pragma mark - Programmatic Menu Creation
 

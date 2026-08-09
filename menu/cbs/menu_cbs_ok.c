@@ -112,6 +112,14 @@
 #include "../../switch_performance_profiles.h"
 #endif
 
+#if defined(_WIN32) && !defined(_XBOX) && defined(HAVE_MENU)
+#include "../../gfx/common/win32_common.h"
+#endif
+
+#if defined(OSX)
+#include "../../ui/drivers/ui_cocoa.h"
+#endif
+
 #ifdef HAVE_MIST
 #include "../../steam/steam.h"
 #endif
@@ -363,6 +371,8 @@ static enum msg_hash_enums action_ok_dl_to_enum(unsigned lbl)
       case ACTION_OK_DL_CORE_BULK_BACKUP_CONFIRM_LIST:
          return MENU_ENUM_LABEL_DEFERRED_CORE_BULK_BACKUP_CONFIRM_LIST;
 #endif
+      case ACTION_OK_DL_CONFIG_IMPORT_CONFIRM_LIST:
+         return MENU_ENUM_LABEL_DEFERRED_CONFIG_IMPORT_CONFIRM_LIST;
       case ACTION_OK_DL_VIDEO_SETTINGS_LIST:
          return MENU_ENUM_LABEL_DEFERRED_VIDEO_SETTINGS_LIST;
       case ACTION_OK_DL_VIDEO_SYNCHRONIZATION_SETTINGS_LIST:
@@ -1899,6 +1909,9 @@ int generic_action_ok_displaylist_push(
          ACTION_OK_DL_LBL(action_ok_dl_to_enum(action_type), DISPLAYLIST_GENERIC);
          break;
 #endif
+      case ACTION_OK_DL_CONFIG_IMPORT_CONFIRM_LIST:
+         ACTION_OK_DL_LBL(action_ok_dl_to_enum(action_type), DISPLAYLIST_GENERIC);
+         break;
       case ACTION_OK_DL_CONTENT_SETTINGS:
          info.list          = MENU_LIST_GET_SELECTION(menu_list, 0);
          info_path          = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CONTENT_SETTINGS);
@@ -2370,6 +2383,64 @@ int generic_action_ok_command(enum event_command cmd)
    return 0;
 }
 
+/* See declaration in menu_cbs.h for why this exists and who calls it. */
+void menu_cbs_stage_config_import(const char *path)
+{
+#ifdef HAVE_CONFIGFILE
+   struct menu_state *menu_st = menu_state_get_ptr();
+
+   if (!path || !*path)
+      return;
+
+   strlcpy(menu_st->pending_config_path, path,
+         sizeof(menu_st->pending_config_path));
+
+   generic_action_ok_displaylist_push(NULL, NULL,
+         MENU_ENUM_LABEL_IMPORT_CONFIG_STR, MENU_SETTING_ACTION, 0, 0,
+         ACTION_OK_DL_CONFIG_IMPORT_CONFIRM_LIST);
+#endif
+}
+
+#ifdef HAVE_CONFIGFILE
+static int action_ok_config_import_confirm(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   struct menu_state *menu_st  = menu_state_get_ptr();
+   size_t new_selection_ptr    = menu_st->selection_ptr;
+
+   menu_st->flags             |= MENU_ST_FLAG_PENDING_CONFIG_REPLACE;
+
+   menu_entries_pop_stack(&new_selection_ptr, 0, 1);
+   menu_st->selection_ptr      = new_selection_ptr;
+   return 0;
+}
+
+static int action_ok_config_import_cancel(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+   struct menu_state *menu_st  = menu_state_get_ptr();
+   size_t new_selection_ptr    = menu_st->selection_ptr;
+
+   /* Discard the staged path - if it pointed at a temporary file
+    * (Android SAF import staging), delete it so it doesn't linger. */
+   if (*menu_st->pending_config_path)
+   {
+      settings_t *settings = config_get_ptr();
+
+      if (!string_is_empty(settings->paths.directory_cache)
+            && string_starts_with(menu_st->pending_config_path,
+                  settings->paths.directory_cache))
+         filestream_delete(menu_st->pending_config_path);
+
+      menu_st->pending_config_path[0] = '\0';
+   }
+
+   menu_entries_pop_stack(&new_selection_ptr, 0, 1);
+   menu_st->selection_ptr      = new_selection_ptr;
+   return 0;
+}
+#endif
+
 static int generic_action_ok(const char *path,
       const char *label, unsigned type, size_t idx, size_t entry_idx,
       unsigned id, enum msg_hash_enums flush_id)
@@ -2452,24 +2523,12 @@ static int generic_action_ok(const char *path,
          break;
       case ACTION_OK_LOAD_CONFIG_FILE:
 #ifdef HAVE_CONFIGFILE
-         {
-            struct menu_state *menu_st      = menu_state_get_ptr();
-            flush_type                      = MENU_SETTINGS;
+         disp_get_ptr()->flags          |= GFX_DISP_FLAG_MSG_FORCE;
 
-            disp_get_ptr()->flags          |= GFX_DISP_FLAG_MSG_FORCE;
-
-            /* config_replace() performs a full driver/menu
-             * reinitialisation and may switch the active menu driver,
-             * freeing the current menu instance. Performing it here -
-             * from within the menu action dispatch - would invalidate
-             * the menu lists (selection_buf/menu_stack) still in use by
-             * generic_menu_entry_action() and its callers, leading to a
-             * use-after-free. Defer it: runloop_check_state() performs
-             * the load on the next frame, before the menu is iterated. */
-            strlcpy(menu_st->pending_config_path, action_path,
-                  sizeof(menu_st->pending_config_path));
-            menu_st->flags                 |= MENU_ST_FLAG_PENDING_CONFIG_REPLACE;
-         }
+         /* Stage the chosen path and show a confirmation screen rather
+          * than replacing the configuration immediately - see
+          * menu_cbs_stage_config_import() for why. */
+         menu_cbs_stage_config_import(action_path);
 #endif
          break;
       case ACTION_OK_LOAD_PRESET:
@@ -4314,6 +4373,103 @@ DEFAULT_ACTION_DIALOG_START(action_ok_save_as_config,
    msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SAVE_AS_CONFIG),
    (unsigned)idx,
    menu_input_st_string_cb_config_file_save_as)
+
+#ifdef HAVE_CONFIGFILE
+/* Fallback for "Export a Configuration File" on platforms with no
+ * OS-native file picker wired up (see action_ok_export_config below):
+ * ask for a bare filename via the on-screen keyboard, join it with the
+ * config directory, and export there - same as action_ok_save_as_config
+ * above, except command_event_export_config() never changes which
+ * configuration file is "active" (see its comment in command.c). */
+static void menu_input_st_string_cb_config_file_export(
+      void *userdata, const char *str)
+{
+   if (str && *str)
+   {
+      settings_t *settings = config_get_ptr();
+      char conf_path[PATH_MAX_LENGTH];
+      size_t _len = fill_pathname_join(conf_path,
+            settings->paths.directory_menu_config, str, sizeof(conf_path));
+
+      if (!string_ends_with(conf_path, FILE_PATH_CONFIG_EXTENSION))
+         strlcpy(conf_path + _len, FILE_PATH_CONFIG_EXTENSION,
+               sizeof(conf_path) - _len);
+
+      command_event_export_config(conf_path);
+   }
+
+   menu_input_dialog_end();
+}
+
+DEFAULT_ACTION_DIALOG_START(action_ok_export_config_fallback,
+   msg_hash_to_str(MENU_ENUM_LABEL_VALUE_EXPORT_CONFIG),
+   (unsigned)idx,
+   menu_input_st_string_cb_config_file_export)
+
+/* "Import a Configuration File": on Android/Windows/macOS this opens the
+ * OS-native file picker; the chosen path is staged and confirmed
+ * asynchronously (Android/Windows) or inline (macOS) via
+ * menu_cbs_stage_config_import(). Everywhere else, fall back to
+ * RetroArch's own file browser (DISPLAYLIST_CONFIG_FILES), which now
+ * also funnels through the same confirmation screen - see
+ * ACTION_OK_LOAD_CONFIG_FILE above. */
+static int action_ok_import_config(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+#if defined(ANDROID) && defined(HAVE_SAF)
+   android_show_saf_open_document_picker();
+   return 0;
+#elif defined(_WIN32) && !defined(_XBOX) && defined(HAVE_MENU)
+   win32_show_config_import_dialog();
+   return 0;
+#elif defined(OSX)
+   {
+      char picked_path[PATH_MAX_LENGTH];
+      if (cocoa_show_config_import_dialog(picked_path, sizeof(picked_path)))
+         menu_cbs_stage_config_import(picked_path);
+      return 0;
+   }
+#else
+   return generic_action_ok_displaylist_push(NULL, NULL,
+         MENU_ENUM_LABEL_CONFIGURATIONS_STR, MENU_SETTING_ACTION,
+         0, 0, ACTION_OK_DL_CONFIGURATIONS_LIST);
+#endif
+}
+
+/* "Export a Configuration File": mirrors action_ok_import_config above
+ * for the save side. On Android the current settings are first written
+ * to a private staging file (command_event_export_config()), which is
+ * then copied to the SAF-picked destination on the Java side. */
+static int action_ok_export_config(const char *path,
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
+{
+#if defined(ANDROID) && defined(HAVE_SAF)
+   {
+      settings_t *settings = config_get_ptr();
+      char staging_path[PATH_MAX_LENGTH];
+      fill_pathname_join_special(staging_path,
+            settings->paths.directory_cache, "export_staging.cfg",
+            sizeof(staging_path));
+      command_event_export_config(staging_path);
+      android_show_saf_create_document_picker("retroarch.cfg");
+   }
+   return 0;
+#elif defined(_WIN32) && !defined(_XBOX) && defined(HAVE_MENU)
+   win32_show_config_export_dialog("retroarch.cfg");
+   return 0;
+#elif defined(OSX)
+   {
+      char picked_path[PATH_MAX_LENGTH];
+      if (cocoa_show_config_export_dialog(picked_path, sizeof(picked_path),
+               "retroarch.cfg"))
+         command_event_export_config(picked_path);
+      return 0;
+   }
+#else
+   return action_ok_export_config_fallback(path, label, type, idx, entry_idx);
+#endif
+}
+#endif
 
 static void menu_input_st_string_cb_override_file_save_as(
       void *userdata, const char *str)
@@ -9561,6 +9717,12 @@ static int menu_cbs_init_bind_ok_compare_label(menu_file_list_cbs_t *cbs,
          {MENU_ENUM_LABEL_SAVE_NEW_CONFIG,                     action_ok_save_new_config},
          {MENU_ENUM_LABEL_SAVE_MAIN_CONFIG,                    action_ok_save_main_config},
          {MENU_ENUM_LABEL_SAVE_AS_CONFIG,                      action_ok_save_as_config},
+#ifdef HAVE_CONFIGFILE
+         {MENU_ENUM_LABEL_IMPORT_CONFIG,                       action_ok_import_config},
+         {MENU_ENUM_LABEL_EXPORT_CONFIG,                       action_ok_export_config},
+         {MENU_ENUM_LABEL_CONFIG_IMPORT_CONFIRM,               action_ok_config_import_confirm},
+         {MENU_ENUM_LABEL_CONFIG_IMPORT_CANCEL,                action_ok_config_import_cancel},
+#endif
          {MENU_ENUM_LABEL_HELP,                                action_ok_help},
 #ifdef HAVE_CHEATS
          {MENU_ENUM_LABEL_CHEAT_FILE_LOAD,                     action_ok_cheat_file},

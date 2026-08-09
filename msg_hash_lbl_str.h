@@ -147,6 +147,11 @@
 #define MENU_ENUM_LABEL_CORE_BULK_BACKUP_CONFIRM_STR "core_bulk_backup_confirm"
 #define MENU_ENUM_LABEL_CORE_BULK_BACKUP_CANCEL_STR "core_bulk_backup_cancel"
 #endif
+#define MENU_ENUM_LABEL_IMPORT_CONFIG_STR "import_config"
+#define MENU_ENUM_LABEL_EXPORT_CONFIG_STR "export_config"
+#define MENU_ENUM_LABEL_DEFERRED_CONFIG_IMPORT_CONFIRM_LIST_STR "deferred_config_import_confirm_list"
+#define MENU_ENUM_LABEL_CONFIG_IMPORT_CONFIRM_STR "config_import_confirm"
+#define MENU_ENUM_LABEL_CONFIG_IMPORT_CANCEL_STR "config_import_cancel"
 #define MENU_ENUM_LABEL_SAVESTATE_LIST_STR "savestate_list"
 #define MENU_ENUM_LABEL_STATE_SLOT_RUN_STR "state_slot_run"
 #define MENU_ENUM_LABEL_CORE_OPTIONS_STR "core_options"

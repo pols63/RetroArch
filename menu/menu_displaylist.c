@@ -1394,6 +1394,44 @@ static unsigned menu_displaylist_parse_core_bulk_backup_confirm_list(file_list_t
 }
 #endif
 
+/* Confirmation screen shown before overwriting the current configuration
+ * with one chosen via "Import a Configuration File" - either through the
+ * OS-native file picker (Android/Windows/macOS) or, as a fallback, this
+ * fork's own internal file browser (see menu_cbs_stage_config_import() in
+ * menu/cbs/menu_cbs_ok.c, which populates menu_st->pending_config_path
+ * before pushing this list). */
+static unsigned menu_displaylist_parse_config_import_confirm_list(file_list_t *list)
+{
+   unsigned count = 0;
+   struct menu_state *menu_st = menu_state_get_ptr();
+   char header[PATH_MAX_LENGTH + 32];
+
+   snprintf(header, sizeof(header), "Import \"%s\"?",
+         path_basename(menu_st->pending_config_path));
+
+   if (menu_entries_append(list, header,
+         MENU_ENUM_LABEL_DEFERRED_CONFIG_IMPORT_CONFIRM_LIST_STR,
+         MENU_ENUM_LABEL_DEFERRED_CONFIG_IMPORT_CONFIRM_LIST,
+         0, 0, 0, NULL))
+      count++;
+
+   if (menu_entries_append(list,
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CONFIG_IMPORT_CONFIRM),
+         MENU_ENUM_LABEL_CONFIG_IMPORT_CONFIRM_STR,
+         MENU_ENUM_LABEL_CONFIG_IMPORT_CONFIRM,
+         MENU_SETTING_ACTION, 0, 0, NULL))
+      count++;
+
+   if (menu_entries_append(list,
+         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CONFIG_IMPORT_CANCEL),
+         MENU_ENUM_LABEL_CONFIG_IMPORT_CANCEL_STR,
+         MENU_ENUM_LABEL_CONFIG_IMPORT_CANCEL,
+         MENU_SETTING_ACTION, 0, 0, NULL))
+      count++;
+
+   return count;
+}
+
 static unsigned menu_displaylist_parse_core_manager_list(file_list_t *list,
       bool kiosk_mode_enable)
 {
@@ -11499,53 +11537,31 @@ unsigned menu_displaylist_build_list(
          }
          break;
       case DISPLAYLIST_CONFIGURATIONS_LIST:
-         {
-            rarch_system_info_t *sys_info = &runloop_state_get_ptr()->system;
-            if (menu_entries_append(list,
-                     msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CONFIGURATIONS),
-                     MENU_ENUM_LABEL_CONFIGURATIONS_STR,
-                     MENU_ENUM_LABEL_CONFIGURATIONS,
-                     MENU_SETTING_ACTION, 0, 0, NULL))
-               count++;
-            if (menu_entries_append(list,
-                     msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SAVE_CURRENT_CONFIG),
-                     MENU_ENUM_LABEL_SAVE_CURRENT_CONFIG_STR,
-                     MENU_ENUM_LABEL_SAVE_CURRENT_CONFIG,
-                     MENU_SETTING_ACTION, 0, 0, NULL))
-               count++;
-            if (menu_entries_append(list,
-                     msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SAVE_NEW_CONFIG),
-                     MENU_ENUM_LABEL_SAVE_NEW_CONFIG_STR,
-                     MENU_ENUM_LABEL_SAVE_NEW_CONFIG,
-                     MENU_SETTING_ACTION, 0, 0, NULL))
-               count++;
-            if (menu_entries_append(list,
-                     msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SAVE_MAIN_CONFIG),
-                     MENU_ENUM_LABEL_SAVE_MAIN_CONFIG_STR,
-                     MENU_ENUM_LABEL_SAVE_MAIN_CONFIG,
-                     MENU_SETTING_ACTION, 0, 0, NULL))
-               count++;
-            if (menu_entries_append(list,
-                     msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SAVE_AS_CONFIG),
-                     MENU_ENUM_LABEL_SAVE_AS_CONFIG_STR,
-                     MENU_ENUM_LABEL_SAVE_AS_CONFIG,
-                     MENU_SETTING_ACTION, 0, 0, NULL))
-               count++;
-            if (menu_entries_append(list,
-                     msg_hash_to_str(MENU_ENUM_LABEL_VALUE_RESET_TO_DEFAULT_CONFIG),
-                     MENU_ENUM_LABEL_RESET_TO_DEFAULT_CONFIG_STR,
-                     MENU_ENUM_LABEL_RESET_TO_DEFAULT_CONFIG,
-                     MENU_SETTING_ACTION, 0, 0, NULL))
-               count++;
-            if (!settings->bools.global_core_options && (sys_info->info.library_name && *sys_info->info.library_name)
-                && menu_entries_append(list,
-                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_OPTIONS_RESET),
-                  "",
-                  MENU_ENUM_LABEL_CORE_OPTIONS_RESET,
-                  MENU_SETTING_ACTION_CORE_OPTIONS_RESET, 0, 0, NULL))
-               count++;
-            break;
-         }
+         if (menu_entries_append(list,
+                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SAVE_CURRENT_CONFIG),
+                  MENU_ENUM_LABEL_SAVE_CURRENT_CONFIG_STR,
+                  MENU_ENUM_LABEL_SAVE_CURRENT_CONFIG,
+                  MENU_SETTING_ACTION, 0, 0, NULL))
+            count++;
+         if (menu_entries_append(list,
+                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_IMPORT_CONFIG),
+                  MENU_ENUM_LABEL_IMPORT_CONFIG_STR,
+                  MENU_ENUM_LABEL_IMPORT_CONFIG,
+                  MENU_SETTING_ACTION, 0, 0, NULL))
+            count++;
+         if (menu_entries_append(list,
+                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_EXPORT_CONFIG),
+                  MENU_ENUM_LABEL_EXPORT_CONFIG_STR,
+                  MENU_ENUM_LABEL_EXPORT_CONFIG,
+                  MENU_SETTING_ACTION, 0, 0, NULL))
+            count++;
+         if (menu_entries_append(list,
+                  msg_hash_to_str(MENU_ENUM_LABEL_VALUE_RESET_TO_DEFAULT_CONFIG),
+                  MENU_ENUM_LABEL_RESET_TO_DEFAULT_CONFIG_STR,
+                  MENU_ENUM_LABEL_RESET_TO_DEFAULT_CONFIG,
+                  MENU_SETTING_ACTION, 0, 0, NULL))
+            count++;
+         break;
       case DISPLAYLIST_PRIVACY_SETTINGS_LIST:
          {
             static const menu_displaylist_build_info_t build_list[] = {
@@ -14636,6 +14652,12 @@ bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type,
                                  | MD_FLAG_NEED_PUSH;
             break;
 #endif
+         case DISPLAYLIST_CONFIG_IMPORT_CONFIRM_LIST:
+            menu_entries_clear(info->list);
+            count                = menu_displaylist_parse_config_import_confirm_list(info->list);
+            info->flags         |= MD_FLAG_NEED_REFRESH
+                                 | MD_FLAG_NEED_PUSH;
+            break;
          case DISPLAYLIST_CORE_MANAGER_LIST:
             {
                /* When a core is deleted, the number of items in

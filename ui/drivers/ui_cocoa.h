@@ -32,6 +32,16 @@ typedef struct ui_window_cocoa
     void *data;
 } ui_window_cocoa_t;
 
+/* "Import a Configuration File" / "Export a Configuration File" (Main
+ * Menu > Configuration File) on macOS - see menu_cbs_ok.c's
+ * action_ok_import_config / action_ok_export_config for the
+ * cross-platform dispatch, and ui_cocoa.m for the implementation. Both
+ * run modally and return synchronously; on success *out_path holds the
+ * chosen absolute path. */
+bool cocoa_show_config_import_dialog(char *out_path, size_t len);
+bool cocoa_show_config_export_dialog(char *out_path, size_t len,
+      const char *suggested_name);
+
 RETRO_END_DECLS
 
 #endif

@@ -65,6 +65,11 @@ import android.widget.TextView;
 
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -95,6 +100,13 @@ public class RetroActivityCommon extends NativeActivity
   public static final int RETRO_RUMBLE_STRONG = 0;
   public static final int RETRO_RUMBLE_WEAK = 1;
   public static final int REQUEST_CODE_OPEN_DOCUMENT_TREE = 0;
+  /* Single-document pickers for "Import/Export a Configuration File"
+   * (Main Menu > Configuration File) - unlike REQUEST_CODE_OPEN_DOCUMENT_TREE
+   * these pick one file, not a folder tree; see requestOpenDocument()/
+   * requestCreateDocument() below and platform_unix.c's
+   * android_show_saf_open_document_picker()/_create_document_picker(). */
+  public static final int REQUEST_CODE_OPEN_DOCUMENT_CONFIG = 1;
+  public static final int REQUEST_CODE_CREATE_DOCUMENT_CONFIG = 2;
   public boolean sustainedPerformanceMode = true;
   public int screenOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
@@ -229,14 +241,107 @@ public class RetroActivityCommon extends NativeActivity
         }
         break;
 
+      case REQUEST_CODE_OPEN_DOCUMENT_CONFIG:
+        {
+          /* "Import a Configuration File": stream the picked document into
+           * a private cache file and hand its plain filesystem path to
+           * native code, which then treats it exactly like a file chosen
+           * on Windows/macOS/Linux - see safConfigImportReady() and
+           * menu_cbs_stage_config_import() (menu/cbs/menu_cbs_ok.c). This
+           * avoids needing a SAF-aware VFS path for a single document. */
+          Uri uri = intent.getData();
+          if (uri == null)
+            break;
+          String tempPath = copySafDocumentToCache(uri, "import_staging.cfg");
+          if (tempPath != null)
+            safConfigImportReady(tempPath);
+        }
+        break;
+
+      case REQUEST_CODE_CREATE_DOCUMENT_CONFIG:
+        {
+          /* "Export a Configuration File": native code already wrote the
+           * current settings to <cacheDir>/export_staging.cfg (see
+           * android_show_saf_create_document_picker() in
+           * platform_unix.c) before launching this picker; copy that
+           * staging file into the SAF-picked destination. */
+          Uri uri = intent.getData();
+          File staging = new File(getCacheDir(), "export_staging.cfg");
+          if (uri != null && staging.exists())
+          {
+            try (InputStream in = new FileInputStream(staging);
+                 OutputStream out = getContentResolver().openOutputStream(uri))
+            {
+              if (out != null)
+                copyStream(in, out);
+            }
+            catch (IOException e)
+            {
+              Log.e("RetroActivityCommon", "Failed to export configuration", e);
+            }
+          }
+          staging.delete();
+        }
+        break;
+
       default:
         break;
     }
   }
 
+  /* Copies a SAF document Uri into <cacheDir>/filename and returns the
+   * resulting plain filesystem path, or null on failure. Shared by
+   * REQUEST_CODE_OPEN_DOCUMENT_CONFIG above. */
+  private String copySafDocumentToCache(Uri uri, String filename)
+  {
+    File dest = new File(getCacheDir(), filename);
+    try (InputStream in = getContentResolver().openInputStream(uri);
+         OutputStream out = new FileOutputStream(dest))
+    {
+      if (in == null)
+        return null;
+      copyStream(in, out);
+      return dest.getAbsolutePath();
+    }
+    catch (IOException e)
+    {
+      Log.e("RetroActivityCommon", "Failed to import configuration", e);
+      return null;
+    }
+  }
+
+  private static void copyStream(InputStream in, OutputStream out) throws IOException
+  {
+    byte[] buf = new byte[8192];
+    int n;
+    while ((n = in.read(buf)) > 0)
+      out.write(buf, 0, n);
+  }
+
   public void requestOpenDocumentTree()
   {
     startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQUEST_CODE_OPEN_DOCUMENT_TREE);
+  }
+
+  /* "Import a Configuration File": called from
+   * android_show_saf_open_document_picker() (platform_unix.c). */
+  public void requestOpenDocument()
+  {
+    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+    intent.addCategory(Intent.CATEGORY_OPENABLE);
+    intent.setType("*/*");
+    startActivityForResult(intent, REQUEST_CODE_OPEN_DOCUMENT_CONFIG);
+  }
+
+  /* "Export a Configuration File": called from
+   * android_show_saf_create_document_picker() (platform_unix.c). */
+  public void requestCreateDocument(String suggestedName)
+  {
+    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+    intent.addCategory(Intent.CATEGORY_OPENABLE);
+    intent.setType("*/*");
+    intent.putExtra(Intent.EXTRA_TITLE, suggestedName);
+    startActivityForResult(intent, REQUEST_CODE_CREATE_DOCUMENT_CONFIG);
   }
 
   public void doVibrate(int id, int effect, int strength, int oneShot)
@@ -1161,6 +1266,13 @@ public class RetroActivityCommon extends NativeActivity
    * Called when the user grants access to a Storage Access Framework tree.
    */
   public native void safTreeAdded(String tree);
+
+  /**
+   * Called once the document picked via requestOpenDocument() has been
+   * copied into a private cache file - tempPath is a plain filesystem
+   * path, not a content:// Uri. See menu_cbs_stage_config_import().
+   */
+  public native void safConfigImportReady(String tempPath);
 
   /**
    * Forwards system-keyboard text to native menu input.

@@ -599,6 +599,18 @@ bool command_event_save_core_config(
  **/
 void command_event_save_current_config(enum override_type type);
 
+#ifdef HAVE_CONFIGFILE
+/**
+ * command_event_export_config:
+ *
+ * Writes the current configuration to an arbitrary path (chosen via an
+ * OS-native file picker or RetroArch's own on-screen keyboard) without
+ * changing which configuration file is "active" - see the "Export a
+ * Configuration File" menu entry.
+ **/
+void command_event_export_config(const char *config_path);
+#endif
+
 /**
  * command_event_remove_current_config:
  *

@@ -172,6 +172,7 @@ enum
 #endif
    ACTION_OK_DL_LAKKA_LIST,
    ACTION_OK_DL_CONFIGURATIONS_LIST,
+   ACTION_OK_DL_CONFIG_IMPORT_CONFIRM_LIST,
    ACTION_OK_DL_COMPRESSED_ARCHIVE_PUSH,
    ACTION_OK_DL_COMPRESSED_ARCHIVE_PUSH_DETECT_CORE,
    ACTION_OK_DL_PARENT_DIRECTORY_PUSH,
@@ -274,6 +275,13 @@ int action_cancel_pop_with_new_pos(const char *path,
 int generic_action_ok_displaylist_push(const char *path, const char *new_path,
       const char *label, unsigned type, size_t idx, size_t entry_idx,
       unsigned action_type);
+
+/* Stages 'path' as the pending configuration file to load and pushes a
+ * confirmation screen ("Import and Overwrite" / "Cancel") rather than
+ * replacing the configuration immediately. Shared by the internal file
+ * browser (menu_cbs_ok.c) and the native file pickers on Windows, macOS
+ * and Android (win32_common.c, ui_cocoa.m, platform_unix.c). */
+void menu_cbs_stage_config_import(const char *path);
 
 int generic_action_cheat_toggle(size_t idx, unsigned type, const char *label,
       bool wraparound);
