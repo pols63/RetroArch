@@ -6,13 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A personal fork of RetroArch (upstream: `libretro/RetroArch`, origin here:
 `pols63/RetroArch`) — the reference frontend for the libretro API. Active
-development on this fork happens on the `dev-masscores` branch and is
-currently focused on the **Android port**. See `docs/memory.md` for the
-state of the current feature branch (bulk core install/backup via SAF) and
-`docs/retroarch-android-bulk-cores.md` / `docs/retroarch-android-bulk-cores-testing.md`
-for the spec and the build/test walkthrough for that feature — read those
-before starting new Android work, they contain hard-won environment
+development on this fork happens on the `dev-masscores` branch and started
+as an **Android port**, since extended to also cover Windows for two
+features: bulk core install/backup (originally SAF-only) and the
+redesigned "Configuration File" menu (Import/Export via the OS's native
+file picker on Android/Windows/macOS, internal browser fallback
+elsewhere). See `docs/memory.md` for the state of the current feature
+branch and `docs/retroarch-android-bulk-cores.md` /
+`docs/retroarch-android-bulk-cores-testing.md` for the spec and the
+build/test walkthrough for the bulk-cores feature — read those before
+starting new Android work, they contain hard-won environment
 troubleshooting (NDK path restrictions, SAF/VFS bridge location, etc.).
+`docs/retroarch-android-build-apk.md` covers the general (non-feature-
+specific) flow of opening the Android project and producing a debug or
+distributable/signed APK.
 
 RetroArch itself: a single native C frontend that loads emulator/game-engine
 backends ("libretro cores") as dynamic libraries and provides
@@ -94,14 +101,43 @@ runtime via `retroarch.cfg` or at build time via a local `Makefile.local`
   `tasks/task_decompress.c` and `tasks/task_core_backup.c` for the pattern
   this fork's bulk-install/backup tasks (`tasks/task_core_bulk_install.c`,
   `tasks/task_core_bulk_backup.c`) follow. Prefer reusing an existing
-  `task_push_*` entry point over reimplementing install/copy logic.
+  `task_push_*` entry point over reimplementing install/copy logic. These
+  two task files now also build on Windows (added to `Makefile.common`,
+  not just Android's `griffin.c`) — the handful of Android/SAF-specific
+  bits inside them (path join, `.so` vs `.dll` filename filter) are
+  branched with `#ifdef ANDROID`/`#elif defined(_WIN32)`, not a
+  whole-file `#ifdef`.
+- **Native OS file/folder pickers**: `ui_browser_window_t`
+  (`ui/ui_companion_driver.h`) is the cross-platform abstraction — `open`
+  (file), `save` (file), `directory` (folder) — implemented per platform
+  in `ui/drivers/ui_win32.c` (`GetOpenFileName`/`GetSaveFileName`/
+  `SHBrowseForFolderW`, threaded via a worker thread that posts
+  `WM_BROWSER_OPEN_RESULT` back to the main window, handled in
+  `gfx/common/win32_common.c`) and `ui/drivers/ui_cocoa.m`
+  (`NSOpenPanel`/`NSSavePanel`, synchronous). Used by both the
+  "Configuration File" menu (Import/Export) and bulk core install/backup's
+  folder picker on Windows; Qt (`ui_qt.cpp`) and macOS's `directory`
+  currently stub to `false` (unimplemented), and platforms without any
+  `ui_companion` browser window fall back to RetroArch's own in-menu file
+  browser. Shared cross-platform glue for what happens once a path is
+  picked lives as plain functions in `menu/cbs/menu_cbs_ok.c`
+  (`menu_cbs_stage_config_import`, `menu_cbs_finish_bulk_install_scan`,
+  `menu_cbs_finish_bulk_backup_scan` — declared in `menu/menu_cbs.h`),
+  called from the Windows result handler, from macOS's synchronous
+  callers, and from Android's `safTreeAdded`/SAF-document JNI callbacks in
+  `frontend/drivers/platform_unix.c` alike, so the confirm-screen/scan
+  logic is written once.
 - **VFS / SAF bridge (Android)**: `frontend/drivers/platform_unix.c` hosts
   the JNI glue; on Android 10+ scoped storage is handled through Storage
   Access Framework (`saf://` paths), with a native↔Java bridge
-  (`android_show_saf_tree_picker()` / `safTreeAdded`) already wired up — the
-  VFS layer reads/writes `saf://` paths transparently, so new
-  SAF-driven features should go through that existing bridge rather than a
-  fresh `DocumentFile`-based Kotlin/Java implementation.
+  (`android_show_saf_tree_picker()` / `safTreeAdded`, plus the single-
+  document pickers `android_show_saf_open_document_picker()` /
+  `_create_document_picker()` used by Import/Export Configuration, which
+  stream through a private cache file instead of extending the VFS layer)
+  already wired up — the VFS layer reads/writes `saf://` paths
+  transparently, so new tree-based SAF-driven features should go through
+  that existing bridge rather than a fresh `DocumentFile`-based
+  Kotlin/Java implementation.
 - **Bundled assets extraction (Android)**: menu theme assets (icons, TTF
   fonts, wallpapers — the `libretro/retroarch-assets` content) are baked
   into the APK's own `assets/` folder at build time (Gradle `sourceSets`

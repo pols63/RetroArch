@@ -1,5 +1,11 @@
 # Memoria de sesión: instalación masiva y backup de cores (Android, SAF)
 
+> **Nota**: este doc arrancó siendo específico de bulk-cores en Android,
+> pero el trabajo más reciente lo extendió a Windows y agregó una segunda
+> feature (rediseño de "Archivo de configuración"). Ver la última sección,
+> "Sesión: homologación a Windows...", para ese trabajo — el resto del
+> documento es el historial original, específico de Android.
+
 Contexto para retomar esta tarea en otra sesión. Rama `dev-masscores`.
 Estado del código de la feature de bulk-cores: **implementación completa y
 committeada** (commit `9633d4977d`, mensaje "dev"). El **build ya compila e
@@ -465,3 +471,161 @@ sin cambio de comportamiento visible ahí.
 se ve una única barra de progreso avanzando ("Installing cores... (i/N)
 nombre.so") sin mensajes superpuestos, y quedó conforme con el resultado.
 Sin pendientes de esta parte.
+
+## Sesión: rediseño de "Archivo de configuración" + homologación de bulk-cores a Windows
+
+Dos features nuevas, ambas ya **committeadas**: `14c27c08f9` ("exporta
+importar configurción") y `ab0853a51c` ("homologación de selección de
+archivo"). A diferencia de todo lo de arriba, esta sesión trabajó en un
+entorno **Windows sin Android Studio abierto** (sin dispositivo físico
+conectado) y **sin ningún compilador de escritorio disponible** (ni MSVC
+ni MinGW/gcc en el PATH) — el único build real que se pudo correr y
+confirmar fue el de Android (`./gradlew assembleAarch64Debug`, dos veces,
+una por feature, ambas exitosas). El código específico de Windows/macOS
+está escrito con cuidado y espejando patrones ya existentes, pero
+**ninguna de las dos features tiene una compilación de escritorio
+confirmada todavía** — es el principal pendiente antes de darlas por
+buenas ahí.
+
+### Feature 1: rediseño del menú "Archivo de configuración" (`14c27c08f9`)
+
+El menú (antes 6-7 opciones: Load Configuration, Save Current, Save New,
+Save Main, Save As, Reset to Defaults, Core Options Reset) se redujo a 4:
+**Guardar configuración actual**, **Importar un archivo de configuración**,
+**Exportar un archivo de configuración**, **Restablecer a valores por
+defecto** (al final). Import/Export usan el picker de archivos **nativo
+del SO** en vez del navegador interno de RetroArch:
+
+- **Android**: nuevo picker de documento único (`ACTION_OPEN_DOCUMENT`/
+  `ACTION_CREATE_DOCUMENT` vía SAF, en `RetroActivityCommon.java` +
+  `platform_unix.c`) — deliberadamente NO se extendió la capa VFS-SAF
+  (pensada para árboles, no documentos sueltos); en cambio, Java copia el
+  documento elegido a un archivo temporal en el cache privado de la app y
+  le pasa esa ruta plana a nativo (`safConfigImportReady`), que la trata
+  igual que cualquier ruta de filesystem normal de Windows/macOS/Linux.
+- **Windows**: `GetOpenFileName`/`GetSaveFileName` (`ui_win32.c`), sobre
+  la infraestructura de diálogo threaded que ya existía pero que nadie
+  usaba desde el menú del juego (solo desde la barra de menú nativa). Se
+  corrigió de paso un bug latente: el modo Save usaba `OFN_FILEMUSTEXIST`
+  (pensado para Open), ahora usa `OFN_OVERWRITEPROMPT`.
+- **macOS**: `NSOpenPanel`/`NSSavePanel` (`ui_cocoa.m`) — el open ya
+  funcionaba (usado por la barra de menú nativa), pero
+  `ui_browser_window_cocoa_save` era un stub que siempre devolvía
+  `false`; se implementó de verdad.
+- **Linux / cualquier otra plataforma**: sigue usando el navegador interno
+  de RetroArch (no hay ninguna base nativa reutilizable ahí — no hay
+  GTK/xdg-desktop-portal en el repo, y el companion Qt no está conectado
+  al menú del juego).
+
+Import siempre pide confirmación (pantalla "Import and Overwrite" /
+"Cancel", nueva `DISPLAYLIST_CONFIG_IMPORT_CONFIRM_LIST`) antes de
+sobreescribir, en TODAS las plataformas — incluida la que sigue usando el
+navegador interno, ya que se unificó el punto de entrada
+(`menu_cbs_stage_config_import()`, `menu/cbs/menu_cbs_ok.c`, declarada en
+`menu/menu_cbs.h`) para que cualquier origen del path (picker nativo o
+navegador interno) pase por el mismo lugar. Export nunca cambia cuál es
+la configuración "activa" de la app (`command_event_export_config()`,
+`command.c` — a diferencia de la vieja "Save As", que sí lo hacía).
+
+**Bug encontrado y corregido de paso, no relacionado con el bug original**:
+al agregar `deferred_push_config_import_confirm_list` (necesaria para
+que la pantalla de confirmación funcione en cualquier plataforma), quedó
+sin querer encerrada dentro de un `#if defined(ANDROID) && ...` en
+`menu/cbs/menu_cbs_deferred_push.c` — habría roto la compilación en
+Windows/Linux/macOS para esta misma feature (símbolo referenciado pero
+nunca definido fuera de Android). Se encontró y arregló durante el
+trabajo de la Feature 2 (ver abajo), al revisar sistemáticamente todos los
+gates relacionados.
+
+### Feature 2: homologar "Instalar Cores desde Carpeta (Bulk)" / "Backup Cores" a Windows (`ab0853a51c`)
+
+Hasta esta sesión, toda la feature de bulk-cores (documentada arriba)
+estaba encerrada en `#if defined(ANDROID) && defined(HAVE_SAF)` en 16
+archivos — no existía en absoluto en Windows/Linux/macOS. Se extendió a
+Windows manteniendo el mismo flujo (escanear carpeta → pantalla de
+confirmación → task async), cambiando solo cómo se elige la carpeta:
+
+- Se agregó un tercer verbo `directory` a `ui_browser_window_t`
+  (`ui/ui_companion_driver.h`, junto a `open`/`save` que ya existían para
+  la Feature 1) — implementado en Windows con `SHBrowseForFolderW`
+  (`<shlobj.h>`, `BIF_NEWDIALOGSTYLE | BIF_RETURNONLYFSDIRS`), con el
+  mismo patrón threaded + `WM_BROWSER_OPEN_RESULT` que los diálogos de
+  archivo. No existía ningún uso de `SHBrowseForFolder`/`IFileOpenDialog`
+  en todo el repo — es superficie de API nueva. Cocoa y Qt reciben un stub
+  `return false` (sin implementar, fuera de alcance esta vez — el usuario
+  pidió explícitamente "solo Windows por ahora").
+- Lógica compartida nueva: `menu_cbs_finish_bulk_install_scan()` /
+  `menu_cbs_finish_bulk_backup_scan()` (`menu/cbs/menu_cbs_ok.c`,
+  declaradas en `menu/menu_cbs.h`) centralizan "ya tengo una carpeta,
+  escanear y mostrar confirmación si corresponde" — tanto el JNI de
+  Android (`safTreeAdded`) como el nuevo handler de
+  `WM_BROWSER_OPEN_RESULT` en Windows las llaman, sin lógica duplicada.
+- **Bug real encontrado por revisión propia, no por la investigación
+  previa**: el filtro de "qué archivo cuenta como core" estaba
+  hard-codeado a extensión `.so` (`CORE_BULK_SUFFIX_PLAIN`/
+  `CORE_BULK_BACKUP_SUFFIX_PLAIN` en `tasks/task_core_bulk_install.c` /
+  `task_core_bulk_backup.c`). En Windows los cores son `.dll` — sin este
+  fix, el escaneo en Windows habría encontrado cero archivos siempre. Ya
+  corregido (`#ifdef ANDROID` → `.so`, `#elif defined(_WIN32)` → `.dll`).
+- `tasks/task_core_bulk_install.c` / `task_core_bulk_backup.c` **no
+  estaban en `Makefile.common`** (solo se compilaban vía `griffin.c`,
+  Android-only) — problema de build, no solo de `#ifdef`. Se agregaron
+  ahí, así que ahora se compilan en cualquier build de escritorio que use
+  `Makefile.common` (Linux/macOS incluidos), aunque en esos dos el gate de
+  menú se quedó angosto a solo Android/Windows — código compilado pero
+  inalcanzable desde el menú, sin efecto práctico.
+- Los 5 usos de `retro_vfs_path_join_saf()` (función SAF-only) quedaron
+  brancheados con un helper nuevo por archivo
+  (`core_bulk_join_source_path()` / `core_bulk_backup_join_dest_path()`):
+  en Android convierte un URI de árbol SAF en ruta VFS; en Windows la
+  carpeta elegida por `SHBrowseForFolderW` ya es una ruta de filesystem
+  normal, así que solo hace falta un join de rutas plano.
+
+### Estado de verificación al cierre de esta sesión
+
+- **Android**: ambas features compilan — se corrió
+  `./gradlew assembleAarch64Debug` (desde `pkg/android/phoenix/`, con
+  `JAVA_HOME` apuntando al JBR de Android Studio) después de cada feature,
+  build exitoso las dos veces. Esto confirma el código compartido (menús,
+  tasks, refactors), pero **ninguna prueba manual en dispositivo** de
+  ninguna de las dos features se hizo esta sesión (a diferencia del
+  trabajo de bulk-cores original, que sí está confirmado en dispositivo
+  real — ver secciones de arriba).
+- **Windows**: código escrito y revisado a mano con cuidado (mismos
+  includes, mismas convenciones que el código Windows ya existente), pero
+  **sin ninguna compilación real** — no había MSVC ni MinGW/gcc
+  disponibles en el entorno de esta sesión. Pendiente: compilar con `make
+  -f Makefile.win` (el build de escritorio que documenta este mismo
+  `CLAUDE.md`) y probar en un Windows real ambas features (Configuration
+  File Import/Export, y Manage Cores → Install/Backup con el picker de
+  carpetas nativo).
+- **macOS**: fuera de alcance esta sesión a pedido del usuario (sin forma
+  de compilar Xcode en este entorno de todos modos). El `save` de
+  Configuration File sí se implementó para mac (Feature 1), pero el
+  `directory` de bulk-cores (Feature 2) quedó como stub sin implementar
+  ahí — decisión consciente, no un olvido.
+- Documentación nueva: `docs/retroarch-android-build-apk.md` — guía
+  general (no específica de ninguna feature) de cómo abrir
+  `pkg/android/phoenix/` en Android Studio y generar un APK de prueba o
+  "distribuible"/firmado. Incluye una advertencia importante:
+  `pkg/android/phoenix/gradle.properties` **está versionado en git** (a
+  diferencia de `local.properties`), así que las contraseñas de un
+  keystore de release no deben escribirse ahí — la guía recomienda
+  pasarlas por `-P` en la línea de comandos o vía el `gradle.properties`
+  global del usuario (`~/.gradle/gradle.properties`).
+
+### Próximos pasos
+
+1. Compilar en un Windows real (`make -f Makefile.win`) y arreglar
+   cualquier error de compilación que aparezca — es lo primero, antes de
+   cualquier prueba manual.
+2. Probar manualmente en Windows: Configuration File → Importar/Exportar
+   (con confirmación antes de sobreescribir), y Manage Cores → Install
+   Cores from Folder (Bulk) / Backup Cores con una carpeta de `.dll`.
+3. Probar en Android (dispositivo real) que Configuration File
+   Import/Export funciona con el picker de documento único nuevo (no
+   confundir con el picker de árbol que ya usa bulk-cores) — no se probó
+   en dispositivo esta sesión, solo se confirmó que compila.
+4. Si en algún momento se retoma macOS: implementar
+   `ui_browser_window_cocoa_directory` (hoy stub) para completar la
+   homologación de bulk-cores en esa plataforma también.

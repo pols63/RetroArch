@@ -3,8 +3,8 @@
 Guía práctica para compilar y probar en dispositivo la implementación descrita
 en `docs/retroarch-android-bulk-cores.md`.
 
-**Estado: verificado en dispositivo real.** El flujo completo — bulk
-install, bulk backup, y la extensión de `info.zip` (offline core-info
+**Estado: verificado en dispositivo real (Android).** El flujo completo —
+bulk install, bulk backup, y la extensión de `info.zip` (offline core-info
 database, ver `docs/memory.md`) — se probó de punta a punta y el usuario lo
 confirmó funcionando. Esta guía ya no es especulativa; las secciones 3 y 4
 reflejan lo que efectivamente se verificó, no una lista de riesgos sin
@@ -12,6 +12,22 @@ probar. Para el detalle de los bugs encontrados y corregidos en el camino
 (un crash de use-after-free reproducible al 100%, diagnosticado con
 `adb logcat -b crash` + `llvm-addr2line` contra el `.so` sin stripear), ver
 `docs/memory.md` — esta guía se queda solo con los pasos prácticos.
+
+> **Windows: mismo feature, homologado, pero sin verificar todavía.** La
+> feature se extendió a Windows (picker de carpetas nativo
+> `SHBrowseForFolder` en vez del interno de RetroArch, ver `docs/memory.md`
+> para el detalle técnico completo). El código compila del lado Android
+> (se re-corrió el build de Gradle tras el cambio, sin regresiones), pero
+> el lado Windows **no se compiló en ningún entorno con MSVC/MinGW** — no
+> hay confirmación de que compile ni de que el diálogo nativo funcione en
+> un dispositivo real todavía. Antes de confiar en esto en Windows: `make
+> -f Makefile.win` (ver `docs/retroarch-android-build-apk.md` para el
+> flujo de build de Android — ese doc no cubre Windows, es solo la
+> referencia de cómo se compila el otro lado de esta misma feature), abrir
+> Main Menu → Manage Cores, y repetir manualmente los pasos de la sección
+> 3 de más abajo (adaptando "carpeta con `.so`" a "carpeta con `.dll`" —
+> el filtro de nombre de archivo también se corrigió para Windows, ver
+> `docs/memory.md`).
 
 ## 1. Prerrequisitos
 
