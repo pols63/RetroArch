@@ -129,8 +129,12 @@ public final class RetroActivityFuture extends RetroActivityCamera {
   public void onStop() {
     super.onStop();
 
-    // If QUITFOCUS parameter was set then completely exit RetroArch when focus is lost
-    if (quitfocus) System.exit(0);
+    // If QUITFOCUS parameter was set then completely exit RetroArch when focus is lost.
+    // Skip while a native OS picker we launched ourselves (Import/Export Configuration
+    // File, bulk cores folder picker) is pending - it steals focus too, via
+    // startActivityForResult(), but the user hasn't actually left RetroArch; see
+    // mSafPickerPending in RetroActivityCommon.
+    if (quitfocus && !mSafPickerPending) System.exit(0);
   }
 
   @Override

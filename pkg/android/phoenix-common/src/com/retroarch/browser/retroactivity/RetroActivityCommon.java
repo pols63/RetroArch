@@ -112,6 +112,17 @@ public class RetroActivityCommon extends NativeActivity
    * comment for why this must NOT be reconstructed independently here
    * (e.g. via getCacheDir()) instead of trusting the value native sent. */
   private String mConfigExportStagingPath;
+  /* True from the moment requestOpenDocumentTree()/requestOpenDocument()/
+   * requestCreateDocument() below launches a native OS picker until
+   * onActivityResult() sees its result. startActivityForResult() stops
+   * this Activity just like backgrounding it would, so RetroActivityFuture's
+   * QUITFOCUS handling (onStop() -> System.exit(0)) needs this flag to
+   * tell "user briefly ceded focus to our own picker" apart from "user
+   * actually left the app" - without it, opening Import/Export Configuration
+   * File or the bulk-cores folder picker while QUITFOCUS is active kills
+   * the whole process before onActivityResult() can run, leaving whatever
+   * destination file the picker already created empty. */
+  protected boolean mSafPickerPending = false;
   public boolean sustainedPerformanceMode = true;
   public int screenOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
@@ -197,6 +208,8 @@ public class RetroActivityCommon extends NativeActivity
   @Override
   public void onActivityResult(int requestCode, int resultCode, Intent intent)
   {
+    mSafPickerPending = false;
+
     if (requestCode == 124)
     {
       if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R)
@@ -333,6 +346,7 @@ public class RetroActivityCommon extends NativeActivity
 
   public void requestOpenDocumentTree()
   {
+    mSafPickerPending = true;
     startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQUEST_CODE_OPEN_DOCUMENT_TREE);
   }
 
@@ -340,6 +354,7 @@ public class RetroActivityCommon extends NativeActivity
    * android_show_saf_open_document_picker() (platform_unix.c). */
   public void requestOpenDocument()
   {
+    mSafPickerPending = true;
     Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
     intent.addCategory(Intent.CATEGORY_OPENABLE);
     intent.setType("*/*");
@@ -368,6 +383,7 @@ public class RetroActivityCommon extends NativeActivity
    * wildcard type produced. */
   public void requestCreateDocument(String suggestedName, String stagingPath)
   {
+    mSafPickerPending = true;
     mConfigExportStagingPath = stagingPath;
     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
     intent.addCategory(Intent.CATEGORY_OPENABLE);
