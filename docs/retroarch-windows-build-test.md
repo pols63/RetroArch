@@ -1,5 +1,15 @@
 # Cómo compilar y probar en Windows (features homologadas)
 
+> **Estado: pausado (2026-08-09).** El foco activo de este fork sigue
+> siendo Android — la homologación a Windows es paridad de UX, no una
+> necesidad funcional (en Windows ya es simple reemplazar
+> `retroarch.cfg`/cores copiando archivos directo a sus carpetas, sin
+> depender del picker nativo). Se dejó de avanzar acá al toparse con que
+> el toolchain MinGW sin firmar es bloqueado por Smart App Control (ver
+> sección "Problemas comunes" más abajo) — evaluado desactivarlo o cruzar
+> a Docker/WSL2 con auto-firma, y por ahora no vale la pena el esfuerzo
+> extra. Este doc queda tal cual para retomarlo cuando corresponda.
+
 Guía para el pendiente que quedó documentado en `docs/memory.md` ("Sesión:
 rediseño de Archivo de configuración + homologación de bulk-cores a
 Windows"): las dos features de `dev-masscores` se extendieron a Windows
