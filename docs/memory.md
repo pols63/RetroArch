@@ -2,12 +2,20 @@
 
 > **Nota**: este doc arrancó siendo específico de bulk-cores en Android,
 > pero el trabajo más reciente lo extendió a Windows y agregó una segunda
-> feature (rediseño de "Archivo de configuración"). Ver las últimas dos
-> secciones — "Sesión: homologación a Windows..." (implementación) y
-> "Sesión: primera prueba real en dispositivo de Import/Export..." (tres
-> bugs encontrados y corregidos en la primera prueba manual) — para ese
-> trabajo; el resto del documento es el historial original, específico de
-> Android.
+> feature (rediseño de "Archivo de configuración"). Ver las secciones
+> "Sesión: homologación a Windows..." (implementación) y "Sesión: primera
+> prueba real en dispositivo de Import/Export..." (tres bugs encontrados y
+> corregidos en la primera prueba manual) para ese trabajo; el resto del
+> documento es el historial original, específico de Android.
+>
+> **Windows quedó pausado** (ver la última sección, "Sesión 2026-08-10")
+> por decisión explícita del usuario — no retomar sin que lo pida. Esa
+> misma sesión también dejó tres docs nuevos de proceso, no de feature:
+> `docs/retroarch-android-sync-upstream.md` (cómo traer cambios de
+> upstream), `docs/retroarch-windows-build-test.md` (el intento de build
+> en Windows, con nota de estado pausado) y
+> `docs/retroarch-menu-item-visibility.md` (cómo ocultar secciones del
+> menú sin tocar código).
 
 Contexto para retomar esta tarea en otra sesión. Rama `dev-masscores`.
 Estado del código de la feature de bulk-cores: **implementación completa y
@@ -619,12 +627,14 @@ confirmación → task async), cambiando solo cómo se elige la carpeta:
 
 ### Próximos pasos
 
-1. Compilar en un Windows real (`make -f Makefile.win`) y arreglar
-   cualquier error de compilación que aparezca — es lo primero, antes de
-   cualquier prueba manual.
-2. Probar manualmente en Windows: Configuration File → Importar/Exportar
-   (con confirmación antes de sobreescribir), y Manage Cores → Install
-   Cores from Folder (Bulk) / Backup Cores con una carpeta de `.dll`.
+1. ~~Compilar en un Windows real (`make -f Makefile.win`) y arreglar
+   cualquier error de compilación que aparezca~~ — **pausado por decisión
+   del usuario** (sesión 2026-08-10, ver "Sesión: sync con upstream +
+   intento de build en Windows..." más abajo). No es un pendiente activo.
+2. ~~Probar manualmente en Windows: Configuration File →
+   Importar/Exportar, y Manage Cores → Install/Backup con `.dll`~~ —
+   mismo motivo, pausado. El código sigue ahí (`ui_win32.c`, filtro
+   `.dll`) sin compilar/probar en Windows real.
 3. ~~Probar en Android (dispositivo real) que Configuration File
    Import/Export funciona~~ — hecho en la sesión siguiente (ver más abajo);
    se encontraron y corrigieron tres bugs reales en el camino.
@@ -747,3 +757,167 @@ llamada, no una tarea diferida — confirmado leyendo
 persiste). Sin pendientes de esta parte. Sigue pendiente de esta rama de
 trabajo, sin cambios: la compilación/prueba en un Windows real (ítems 1-2
 de "Próximos pasos" arriba).
+
+## Sesión 2026-08-10: workflow de sync con upstream, intento de build en Windows (pausado), y visibilidad de ítems del menú
+
+Sesión de trabajo de infraestructura/proceso, no de una feature nueva.
+Tres resultados, cada uno con su propio doc nuevo:
+
+### 1. Workflow para traer actualizaciones de `libretro/RetroArch`
+
+Diagnóstico: `origin` (`pols63/RetroArch`) es el único remoto; su
+`master` es un mirror limpio de upstream (sin commits propios), y estaba
+99 commits detrás en el momento de esta sesión. `dev-masscores` tiene los
+commits propios del fork por encima.
+
+Documentado en **`docs/retroarch-android-sync-upstream.md`**: agregar
+remoto `upstream` (`libretro/RetroArch`), traer cambios a `master` con
+`merge --ff-only`, después `merge` (no `rebase`, porque `dev-masscores` ya
+está publicada) a `dev-masscores`. Se identificaron los archivos
+compartidos donde es más probable un conflicto (`griffin.c`,
+`Makefile.common`, `platform_unix.c` — por el fix de `assets_directory` ya
+documentado arriba —, los cuatro archivos de menú
+`menu_displaylist.c`/`menu_cbs_*.c`, y `pkg/android/phoenix/build.gradle`).
+
+**Decisión de alcance por release, dejada explícita en el doc**: `master`
+de upstream es tronco de desarrollo continuo, no solo features
+terminadas — verificado: al último tag (`v1.22.2`, 2025-11-20) le seguían
+4191 commits sin nuevo release en casi 9 meses. Se documentaron dos
+caminos (Opción A: traer todo `master`; Opción B: traer solo el último
+tag) — el usuario **usó la Opción A esta vez conscientemente**, dejando
+abierta la Opción B para el próximo release si aparece algo inestable.
+
+**`media/assets` convertida a clon git real**: la carpeta (gitignored,
+poblada por `fetch-submodules.sh`, es lo que `build.gradle:136` empaqueta
+en el APK) no tenía `.git` propio en este entorno, así que no se podía
+`git pull`. Se re-clonó de cero (`git clone
+https://github.com/libretro/retroarch-assets.git media/assets`,
+confirmado con `git -C media/assets log -1`) — de ahora en más se
+actualiza con `git -C media/assets pull`, documentado en el mismo doc de
+sync. Confirmado además que el re-empaquetado en dispositivos ya
+instalados es automático (sin pasos manuales): `versionCode` en
+`build.gradle:49` se genera con timestamp en cada build, y
+`menu/menu_driver.c:3773-3794` compara ese valor contra
+`bundle_assets_extract_last_version` guardado en `retroarch.cfg` para
+decidir si re-extrae — cualquier build nuevo dispara el refresh.
+
+### 2. Intento de compilar y probar en Windows — pausado
+
+Se retomó el pendiente de "Próximos pasos" (arriba) de compilar las dos
+features homologadas a Windows (`ui_win32.c`, filtro `.dll`) que nunca se
+habían compilado de verdad. Se armó **`docs/retroarch-windows-build-test.md`**
+con el flujo MSYS2 + `make -f Makefile.win` (confirmado en código: este
+Makefile usa `gcc`/`g++`/`windres`, no MSVC).
+
+En la ejecución real aparecieron dos bloqueos de seguridad de Windows, en
+orden:
+1. Windows Defender (reputación de archivos) bloqueando `ar.exe` durante
+   `pacman -Syu` — resuelto agregando `C:\msys64` a las exclusiones de
+   Defender.
+2. **Smart App Control** (verificado activo y en modo "Enforced" vía
+   registro, `HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy\VerifiedAndReputablePolicyState`)
+   bloqueando la ejecución de `gcc.exe` — mecanismo separado de Defender,
+   ignora sus exclusiones, bloquea cualquier binario sin firmar (todo el
+   toolchain MinGW). Se evaluaron alternativas (desactivar Smart App
+   Control — un solo sentido, solo se reactiva con reinstalación limpia
+   de Windows; cross-compilar desde Docker/WSL2 con auto-firma del
+   `.exe` final) sin instalar ninguna, porque **el usuario decidió pausar
+   Windows por completo**: en Windows ya es suficientemente flexible
+   reemplazar `retroarch.cfg`/cores copiando archivos directo a sus
+   carpetas, y la limitación real que motivó todo este fork siempre fue
+   Android (SAF/sandboxing), no Windows.
+
+**Estado**: pausado explícitamente, con nota al inicio de
+`docs/retroarch-windows-build-test.md` y memoria de proyecto guardada
+para no proponerlo de nuevo sin que el usuario lo pida. El código Windows
+sigue intacto y committeado, simplemente sin compilar/probar.
+
+### 3. Sistema nativo de visibilidad de ítems del menú (descubrimiento)
+
+A raíz de la queja del usuario de que le cuesta encontrar opciones
+"vistas en algún lado" dentro del menú (Historial, Favoritos, Imágenes,
+Núcleos sin contenido, Explorar, y submenús profundos de Settings),
+surgió la pregunta de si convenía *eliminar* funcionalidades de RetroArch
+del código para simplificar. Se descartó esa idea con el mismo argumento
+que Windows (archivos como `menu_displaylist.c`/`xmb.c`/`ozone.c` son de
+los más activos upstream — borrar ahí sería la peor superficie posible
+para el workflow de sync) a favor de una alternativa ya nativa de
+RetroArch, sin tocar código: **76 interruptores de visibilidad**
+(`menu_content_show_*`, `menu_show_*`, `settings_show_*`,
+`quick_menu_show_*`), confirmados uno por uno en `configuration.h` y
+`settings/settings_def_*.h`, todos persistidos en `retroarch.cfg`.
+
+Documentado en **`docs/retroarch-menu-item-visibility.md`**: los 3 métodos
+(desde el menú vía "Settings Views"/"Quick Menu Views"; editando
+`retroarch.cfg` a mano; cambiando los defaults del fork en
+`config.def.h` para que salgan así de fábrica en cada build nuevo) más la
+tabla de referencia completa con las claves reales verificadas en código
+(varias difieren del nombre de la variable en C — ej. el campo
+`menu_content_show_favorites` se guarda como `content_show_favorites`,
+sin el prefijo `menu_`). Pendiente para una próxima sesión: el usuario
+todavía no indicó cuáles interruptores concretos quiere apagar para su
+propio uso.
+
+## Sesión 2026-08-11: traducción al español de las cadenas propias del fork
+
+El usuario notó que las opciones de menú agregadas por este fork (bulk
+install/backup de cores y el rediseño de "Archivo de configuración", ver
+secciones arriba) se mostraban en inglés incluso con RetroArch en
+español. Causa: esas claves (`MENU_ENUM_LABEL_VALUE_CORE_BULK_*`,
+`..._IMPORT_CONFIG`, `..._EXPORT_CONFIG`, `..._CONFIG_IMPORT_*`) sólo
+existen en `intl/msg_hash_us.h` — nunca se subieron a Crowdin (el pipeline
+real de traducción, ver `intl/crowdin_sync.py`), así que el lookup en
+runtime cae al inglés como *fallback* para cualquier idioma no-US.
+
+**Problema**: `intl/msg_hash_es.h` (y el resto de `intl/msg_hash_*.h`
+salvo `_us`/`_lbl`) no es texto plano editable — es una tabla empaquetada
+generada por `intl/json2h.py` (comentario en el propio archivo: "THIS
+FILE IS GENERATED ... do not edit"): un struct de arrays `char[N]` de
+tamaño fijo por cadena (nombradas `s_<hash-djb2-de-8-hex>`, con overrides
+por colisión `_cN` y por fragmentación >500 bytes `_N`), un blob de
+inicializadores en el mismo orden, un `sizeof()` check de contigüidad, y
+un array `msg_hash_es_ids[]` con las claves (enum) en el mismo orden —
+todo con guards `#if` calcados de `msg_hash_us.h`. Sin acceso a Crowdin
+(y sin Python instalado en esta máquina — sólo Node), no había forma de
+regenerar el archivo por la vía oficial.
+
+**Solución**: se escribió un script Node
+(`intl/json2h.py`-compatible, ad-hoc, no committeado — vivió en el
+scratchpad de la sesión) que reimplementa el algoritmo de empaquetado de
+`json2h.py`: desempaqueta `msg_hash_es.h` a filas `(clave, bytes, guard)`
+parseando las tres secciones (decl de miembros, blob de inicializadores,
+`ids[]`) con reconstrucción por hash djb2 (las claves están literalmente
+en `ids[]`, así que el hash de cada miembro se recalcula y se empareja
+por prefijo `s_<hash>`, con manejo de colisión/fragmentación). Antes de
+escribir nada, valida por **round-trip**: reempaqueta las filas
+reconstruidas sin cambios y compara byte a byte contra el archivo
+original (detectó y permitió corregir dos bugs propios — comparación con
+sección incompleta, y un `\n` de más en el header — antes de tocar el
+archivo de verdad). Sólo tras el round-trip exitoso agrega las 17 filas
+nuevas (label+sublabel de cada entrada de menú nueva, más las cadenas
+sueltas de "Cancelar") y reempaqueta con el mismo formato exacto
+(escape octal fijo de 3 dígitos, ancho de línea 96, CRLF — este repo usa
+`core.autocrlf=true`, blob en git es LF-only). Terminología alineada con
+el resto del archivo ES ya existente (`core`→"núcleo", `backup`→"copia de
+seguridad", `folder`→"carpeta"). Diff final limpio: 81
+inserciones, 1 línea modificada (el total del `sizeof()` check) — nada
+más se tocó.
+
+**Alcance**: sólo agrega la traducción a español (el idioma que usa el
+usuario). El resto de los ~50 idiomas de `intl/msg_hash_*.h` se queda sin
+estas claves y sigue cayendo a inglés — aceptable, es lo mismo que pasa
+hoy con cualquier string que Crowdin todavía no tradujo a un idioma
+minoritario.
+
+**Nota de seguridad para la próxima sesión que toque `msg_hash_es.h`**:
+a media tarea se detectó un bug (header duplicado) y se corrigió con
+`git checkout -- intl/msg_hash_es.h` **sin correr `git status` antes**,
+saltándose el protocolo de seguridad habitual. El snapshot de git al
+inicio de esta conversación ya mostraba `intl/msg_hash_es.h` como
+modificado (`M`) *antes* de que esta sesión lo tocara — no se investigó
+qué era ese cambio previo antes de descartarlo con el checkout, y no es
+recuperable (no había stash ni blob en el índice; `git fsck` no encontró
+nada). La composición del diff final (100% atribuible a las 17 claves
+nuevas, sin contenido ajeno) sugiere que ese `M` previo era ruido de
+fin de línea y no trabajo real perdido, pero es una inferencia, no una
+certeza confirmada con el usuario.

@@ -473,6 +473,8 @@ static const struct
    char s_ce5f3353[22];
    char s_6155456e[26];
    char s_e4e54370[15];
+   char s_a103f29d[9];
+   char s_e22c3645[24];
    char s_40bca412[31];
    char s_e78c87a1[43];
    char s_f33a0acb[34];
@@ -519,6 +521,14 @@ static const struct
    char s_63a07f7e[34];
    char s_1e1c0557[10];
    char s_e68b50a2[14];
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+   char s_7adc08b8[9];
+   char s_f7070fc0[34];
+   char s_352e950c[31];
+   char s_ffe63399[9];
+   char s_1d5696c1[15];
+   char s_3cf8c38d[45];
+#endif
    char s_feb1c160[7];
    char s_b2e4b4c3[22];
    char s_97242f99[37];
@@ -697,6 +707,7 @@ static const struct
    char s_52fded9c[17];
    char s_a578b37f[13];
    char s_99eb425d[9];
+   char s_93a478df[38];
    char s_c6358575[41];
    char s_411a3db3[12];
    char s_e645f7ac[43];
@@ -745,6 +756,7 @@ static const struct
    char s_2e7dbc66[17];
    char s_74eeda27[19];
    char s_b30d3e14[10];
+   char s_b6ab9bb8[38];
    char s_99d3d4ae[13];
    char s_d81bf7a9[13];
    char s_af315ae7[64];
@@ -2562,6 +2574,7 @@ static const struct
    char s_de265901[69];
    char s_4a3d27dc[43];
    char s_f496371e[70];
+   char s_a4966c33[83];
    char s_29a48680[95];
    char s_d0746a0f[72];
    char s_12bc32b9[64];
@@ -2597,6 +2610,12 @@ static const struct
    char s_b9147244[48];
    char s_e04176ec[78];
    char s_e0863b45[59];
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+   char s_b6c3a6ee[63];
+   char s_3b12c53a[62];
+   char s_d4a613af[84];
+   char s_ff62f97b[101];
+#endif
    char s_43d00e0e[22];
    char s_dc427c47[51];
    char s_684b0cb1[32];
@@ -2664,6 +2683,7 @@ static const struct
    char s_043f1283[49];
 #endif
 #endif
+   char s_b326a0cd[106];
    char s_a8b02d9a[136];
    char s_8a8a4bd7[249];
    char s_aa30afc7[69];
@@ -2699,6 +2719,7 @@ static const struct
    char s_8d99673a[59];
    char s_7fd5ef69[87];
    char s_7d9ab595[81];
+   char s_d62dc3a6[137];
    char s_752f291c[48];
    char s_9eb26572[37];
    char s_50707595[83];
@@ -4867,6 +4888,8 @@ static const struct
    "Cargar configuraci\303\263n",
    "Archivo de configuraci\303\263n",
    "Configuraci\303\263n",
+   "Cancelar",
+   "Importar y sobrescribir",
    "Guardar configuraci\303\263n m\303\255nima",
    "Guardar configuraci\303\263n al cerrar RetroArch",
    "Confirmar el cierre de contenidos",
@@ -4913,6 +4936,14 @@ static const struct
    "Lista de reproducci\303\263n de V\303\255deos",
    "Descargas",
    "[Autom\303\241tico]",
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+   "Cancelar",
+   "Hacer copia de seguridad de todos",
+   "Copia de seguridad de n\303\272cleos",
+   "Cancelar",
+   "Instalar todos",
+   "Instalar n\303\272cleos desde una carpeta (masivo)",
+#endif
    "Trucos",
    "Contadores de n\303\272cleo",
    "Hacer copia de seguridad del n\303\272cleo",
@@ -5093,6 +5124,7 @@ static const struct
    "Buscar nombre...",
    "Mostrar todo",
    "Explorar",
+   "Exportar un archivo de configuraci\303\263n",
    "Clave de transmisi\303\263n de Facebook Gaming",
    "Desactivado",
    "Omitir fotogramas seg\303\272n el avance r\303\241pido",
@@ -5141,6 +5173,7 @@ static const struct
    "Men\303\272 horizontal",
    "Miniatura de icono",
    "Im\303\241genes",
+   "Importar un archivo de configuraci\303\263n",
    "Informaci\303\263n",
    "Informaci\303\263n",
    "Cargar archivos de \303\255ndices de disco iniciales autom\303\241ticamente",
@@ -7049,6 +7082,7 @@ static const struct
    "Carga la configuraci\303\263n existente reemplazando los valores actuales.",
    "Administra los archivos de configuraci\303\263n.",
    "Cambia los valores predeterminados de los archivos de configuraci\303\263n.",
+   "Carga el archivo de configuraci\303\263n elegido, reemplazando la configuraci\303\263n actual.",
    "Guarda \303\272nicamente aquellos ajustes que hayan cambiado respecto a los valores predetermina"
    "dos.",
    "Guarda los cambios en el archivo de configuraci\303\263n al cerrar RetroArch.",
@@ -7103,6 +7137,13 @@ static const struct
    "Muestra la opci\303\263n \302\253Disposiciones de v\303\255deo\302\273.",
    "Almacena la lista de reproducci\303\263n de la secci\303\263n V\303\255deos en este directorio.",
    "En este directorio se guardar\303\241n los archivos descargados.",
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+   "Copia todos los n\303\272cleos listados arriba a la carpeta elegida.",
+   "Copia todos los n\303\272cleos instalados a una carpeta que elijas.",
+   "Instala todos los archivos de n\303\272cleo listados arriba en el directorio de n\303\272cleos.",
+   "Elige una carpeta e instala en ella todos los archivos de n\303\272cleo que se encuentren, todos"
+   " a la vez.",
+#endif
    "Configura los trucos.",
    "Crea una copia de seguridad del n\303\272cleo instalado.",
    "Elimina este n\303\272cleo del disco.",
@@ -7203,6 +7244,8 @@ static const struct
    "Expulsa el disco de la unidad de CD/DVD f\303\255sica.",
 #endif
 #endif
+   "Guarda la configuraci\303\263n actual en la ubicaci\303\263n que elijas mediante el selector de "
+   "archivos del sistema.",
    "Omite los fotogramas seg\303\272n la velocidad del avance r\303\241pido. Ahorra energ\303\255a y"
    " permite el uso de limitadores de fotogramas de terceros.",
    "Ajusta la velocidad m\303\241xima con la que se ejecutar\303\241 un contenido al usar el avance "
@@ -7259,6 +7302,8 @@ static const struct
    "Permite tener listas de juegos, im\303\241genes, m\303\272sica y v\303\255deos utilizados recien"
    "temente.",
    "El tipo de miniatura que se mostrar\303\241 como icono de las listas de reproducci\303\263n.",
+   "Elige un archivo de configuraci\303\263n existente mediante el selector de archivos del sistema."
+   " Esto sobrescribir\303\241 la configuraci\303\263n actual.",
    "Muestra m\303\241s informaci\303\263n sobre este contenido.",
    "Muestra la informaci\303\263n del sistema.",
    "Al ejecutar un contenido de varios discos, se cargar\303\241 el \303\272ltimo disco utilizado.",
@@ -9358,7 +9403,7 @@ static const struct
  * compiler that pads this struct fails here instead of
  * misindexing at runtime. */
 typedef char msg_hash_es_blob_check[
-      (sizeof(msg_hash_es_blob) == (207722u
+      (sizeof(msg_hash_es_blob) == (208157u
 #ifdef ANDROID
        + 329u
 #endif
@@ -9387,6 +9432,14 @@ typedef char msg_hash_es_blob_check[
        + 24u
        + 15u
        + 20u
+#endif
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+       + 9u
+       + 34u
+       + 31u
+       + 9u
+       + 15u
+       + 45u
 #endif
 #ifdef HAVE_GAME_AI
        + 12u
@@ -9589,6 +9642,12 @@ typedef char msg_hash_es_blob_check[
        + 59u
        + 144u
        + 55u
+#endif
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+       + 63u
+       + 62u
+       + 84u
+       + 101u
 #endif
 #ifdef HAVE_MIST
        + 67u
@@ -10235,6 +10294,8 @@ static const uint32_t msg_hash_es_ids[] =
    (uint32_t)MENU_ENUM_LABEL_VALUE_CONFIGURATIONS,
    (uint32_t)MENU_ENUM_LABEL_VALUE_CONFIGURATIONS_LIST,
    (uint32_t)MENU_ENUM_LABEL_VALUE_CONFIGURATION_SETTINGS,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_CONFIG_IMPORT_CANCEL,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_CONFIG_IMPORT_CONFIRM,
    (uint32_t)MENU_ENUM_LABEL_VALUE_CONFIG_SAVE_MINIMAL,
    (uint32_t)MENU_ENUM_LABEL_VALUE_CONFIG_SAVE_ON_EXIT,
    (uint32_t)MENU_ENUM_LABEL_VALUE_CONFIRM_CLOSE,
@@ -10281,6 +10342,14 @@ static const uint32_t msg_hash_es_ids[] =
    (uint32_t)MENU_ENUM_LABEL_VALUE_CONTENT_VIDEO_HISTORY_DIRECTORY,
    (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_ASSETS_DIRECTORY,
    (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_BACKUP_MODE_AUTO,
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+   (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_CANCEL,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_CONFIRM,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_BULK_BACKUP_SAF,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_CANCEL,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_CONFIRM,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_BULK_INSTALL_SAF,
+#endif
    (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_CHEAT_OPTIONS,
    (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_COUNTERS,
    (uint32_t)MENU_ENUM_LABEL_VALUE_CORE_CREATE_BACKUP,
@@ -10459,6 +10528,7 @@ static const uint32_t msg_hash_es_ids[] =
    (uint32_t)MENU_ENUM_LABEL_VALUE_EXPLORE_SEARCH_NAME,
    (uint32_t)MENU_ENUM_LABEL_VALUE_EXPLORE_SHOW_ALL,
    (uint32_t)MENU_ENUM_LABEL_VALUE_EXPLORE_TAB,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_EXPORT_CONFIG,
    (uint32_t)MENU_ENUM_LABEL_VALUE_FACEBOOK_STREAM_KEY,
    (uint32_t)MENU_ENUM_LABEL_VALUE_FALSE,
    (uint32_t)MENU_ENUM_LABEL_VALUE_FASTFORWARD_FRAMESKIP,
@@ -10507,6 +10577,7 @@ static const uint32_t msg_hash_es_ids[] =
    (uint32_t)MENU_ENUM_LABEL_VALUE_HORIZONTAL_MENU,
    (uint32_t)MENU_ENUM_LABEL_VALUE_ICON_THUMBNAILS,
    (uint32_t)MENU_ENUM_LABEL_VALUE_IMAGES_TAB,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_IMPORT_CONFIG,
    (uint32_t)MENU_ENUM_LABEL_VALUE_INFORMATION,
    (uint32_t)MENU_ENUM_LABEL_VALUE_INFORMATION_LIST,
    (uint32_t)MENU_ENUM_LABEL_VALUE_INITIAL_DISK_CHANGE_ENABLE,
@@ -12321,6 +12392,7 @@ static const uint32_t msg_hash_es_ids[] =
    (uint32_t)MENU_ENUM_SUBLABEL_CONFIGURATIONS,
    (uint32_t)MENU_ENUM_SUBLABEL_CONFIGURATIONS_LIST,
    (uint32_t)MENU_ENUM_SUBLABEL_CONFIGURATION_SETTINGS,
+   (uint32_t)MENU_ENUM_SUBLABEL_CONFIG_IMPORT_CONFIRM,
    (uint32_t)MENU_ENUM_SUBLABEL_CONFIG_SAVE_MINIMAL,
    (uint32_t)MENU_ENUM_SUBLABEL_CONFIG_SAVE_ON_EXIT,
    (uint32_t)MENU_ENUM_SUBLABEL_CONFIRM_CLOSE,
@@ -12356,6 +12428,12 @@ static const uint32_t msg_hash_es_ids[] =
    (uint32_t)MENU_ENUM_SUBLABEL_CONTENT_SHOW_VIDEO_LAYOUT,
    (uint32_t)MENU_ENUM_SUBLABEL_CONTENT_VIDEO_HISTORY_DIRECTORY,
    (uint32_t)MENU_ENUM_SUBLABEL_CORE_ASSETS_DIRECTORY,
+#if (defined(ANDROID) && defined(HAVE_SAF)) || (defined(_WIN32) && !defined(_XBOX))
+   (uint32_t)MENU_ENUM_SUBLABEL_CORE_BULK_BACKUP_CONFIRM,
+   (uint32_t)MENU_ENUM_SUBLABEL_CORE_BULK_BACKUP_SAF,
+   (uint32_t)MENU_ENUM_SUBLABEL_CORE_BULK_INSTALL_CONFIRM,
+   (uint32_t)MENU_ENUM_SUBLABEL_CORE_BULK_INSTALL_SAF,
+#endif
    (uint32_t)MENU_ENUM_SUBLABEL_CORE_CHEAT_OPTIONS,
    (uint32_t)MENU_ENUM_SUBLABEL_CORE_CREATE_BACKUP,
    (uint32_t)MENU_ENUM_SUBLABEL_CORE_DELETE,
@@ -12423,6 +12501,7 @@ static const uint32_t msg_hash_es_ids[] =
    (uint32_t)MENU_ENUM_SUBLABEL_EJECT_DISC,
 #endif
 #endif
+   (uint32_t)MENU_ENUM_SUBLABEL_EXPORT_CONFIG,
    (uint32_t)MENU_ENUM_SUBLABEL_FASTFORWARD_FRAMESKIP,
    (uint32_t)MENU_ENUM_SUBLABEL_FASTFORWARD_RATIO,
    (uint32_t)MENU_ENUM_SUBLABEL_FILE_BROWSER_OPEN_PICKER,
@@ -12458,6 +12537,7 @@ static const uint32_t msg_hash_es_ids[] =
    (uint32_t)MENU_ENUM_SUBLABEL_HELP_LIST,
    (uint32_t)MENU_ENUM_SUBLABEL_HISTORY_LIST_ENABLE,
    (uint32_t)MENU_ENUM_SUBLABEL_ICON_THUMBNAILS,
+   (uint32_t)MENU_ENUM_SUBLABEL_IMPORT_CONFIG,
    (uint32_t)MENU_ENUM_SUBLABEL_INFORMATION,
    (uint32_t)MENU_ENUM_SUBLABEL_INFORMATION_LIST_LIST,
    (uint32_t)MENU_ENUM_SUBLABEL_INITIAL_DISK_CHANGE_ENABLE,

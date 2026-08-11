@@ -19,7 +19,17 @@ starting new Android work, they contain hard-won environment
 troubleshooting (NDK path restrictions, SAF/VFS bridge location, etc.).
 `docs/retroarch-android-build-apk.md` covers the general (non-feature-
 specific) flow of opening the Android project and producing a debug or
-distributable/signed APK.
+distributable/signed APK. `docs/retroarch-android-sync-upstream.md`
+covers pulling updates from `libretro/RetroArch` into this fork without
+losing the Android-specific work. `docs/retroarch-windows-build-test.md`
+covers building/testing the Windows-homologated features (MSYS2 +
+`Makefile.win`) — **paused** by explicit user decision (see
+`docs/memory.md`'s last session), don't resume without being asked.
+`docs/retroarch-menu-item-visibility.md` documents RetroArch's built-in
+menu-item visibility settings (`menu_content_show_*`, `menu_show_*`,
+`settings_show_*`, `quick_menu_show_*`) — the preferred way to declutter
+the menu is toggling these, not deleting feature code (same
+upstream-merge-friction argument as not stripping Windows support).
 
 RetroArch itself: a single native C frontend that loads emulator/game-engine
 backends ("libretro cores") as dynamic libraries and provides
