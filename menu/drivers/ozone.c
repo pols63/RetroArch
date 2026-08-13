@@ -2651,6 +2651,12 @@ static uintptr_t ozone_entries_icon_get_texture(
          && type <= MENU_SETTINGS_INPUT_DESC_KBD_END)
    {
       size_t enum_label_len = strlen(enum_label);
+      /* RetroPad A/B/X/Y map to on-screen diamond positions using the
+       * Nintendo/SNES layout (B bottom, A right, Y left, X top) by
+       * default; swap to the Xbox physical layout (A bottom, B right,
+       * X left, Y top) when requested, so the icon's position matches
+       * where the button actually sits on the user's controller. */
+      bool xbox_face_buttons = config_get_ptr()->bools.input_menu_xbox_face_buttons;
 
       /* This part is only utilized by Input User # Binds */
       if (type < MENU_SETTINGS_INPUT_DESC_BEGIN)
@@ -2686,13 +2692,21 @@ static uintptr_t ozone_entries_icon_get_texture(
       else if (string_ends_with_size(enum_label, "_right", enum_label_len, STRLEN_CONST("_right")))
          return icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_DPAD_R];
       else if (string_ends_with_size(enum_label, "_b", enum_label_len, STRLEN_CONST("_b")))
-         return icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_D];
+         return icons_tex[xbox_face_buttons
+               ? OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_R
+               : OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_D];
       else if (string_ends_with_size(enum_label, "_a", enum_label_len, STRLEN_CONST("_a")))
-         return icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_R];
+         return icons_tex[xbox_face_buttons
+               ? OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_D
+               : OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_R];
       else if (string_ends_with_size(enum_label, "_y", enum_label_len, STRLEN_CONST("_y")))
-         return icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_L];
+         return icons_tex[xbox_face_buttons
+               ? OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_U
+               : OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_L];
       else if (string_ends_with_size(enum_label, "_x", enum_label_len, STRLEN_CONST("_x")))
-         return icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_U];
+         return icons_tex[xbox_face_buttons
+               ? OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_L
+               : OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_U];
       else if (string_ends_with_size(enum_label, "_select", enum_label_len, STRLEN_CONST("_select")))
          return icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_SELECT];
       else if (string_ends_with_size(enum_label, "_start", enum_label_len, STRLEN_CONST("_start")))

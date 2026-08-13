@@ -8712,6 +8712,7 @@ unsigned menu_displaylist_build_list(
                {MENU_ENUM_LABEL_POINTER_ENABLE,                     PARSE_ONLY_BOOL, true},
                {MENU_ENUM_LABEL_MENU_INPUT_SWAP_OK_CANCEL,          PARSE_ONLY_BOOL, true},
                {MENU_ENUM_LABEL_MENU_INPUT_SWAP_SCROLL,             PARSE_ONLY_BOOL, true},
+               {MENU_ENUM_LABEL_MENU_XBOX_FACE_BUTTONS,             PARSE_ONLY_BOOL, true},
                {MENU_ENUM_LABEL_INPUT_UNIFIED_MENU_CONTROLS,        PARSE_ONLY_BOOL, true},
                {MENU_ENUM_LABEL_INPUT_ALL_USERS_CONTROL_MENU,       PARSE_ONLY_BOOL, true},
                {MENU_ENUM_LABEL_MENU_SINGLECLICK_PLAYLISTS,         PARSE_ONLY_BOOL, true},

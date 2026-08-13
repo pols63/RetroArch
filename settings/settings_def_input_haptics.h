@@ -50,6 +50,15 @@ S_BOOL(input_menu_swap_scroll_buttons, MENU_INPUT_SWAP_SCROLL,
 /* The configuration row lives under defined(HAVE_MENU); other passes are
  * unaffected. */
 #if !defined(SETTINGS_DEF_CONFIG_PASS) || (defined(HAVE_MENU))
+S_BOOL(input_menu_xbox_face_buttons, MENU_XBOX_FACE_BUTTONS,
+      "menu_xbox_face_buttons",
+      DEFAULT_MENU_XBOX_FACE_BUTTONS, SD_FLAG_NONE, 0, 0,
+      "Xbox-Style Face Button Icons",
+      "Show A/B/X/Y RetroPad icons in the Xbox physical layout (A bottom, B right, X left, Y top) instead of the default Nintendo layout (B bottom, A right, Y left, X top). Affects icons shown in Quick Menu > Controls and input bind lists; does not change which button performs which action.")
+#endif
+/* The configuration row lives under defined(HAVE_MENU); other passes are
+ * unaffected. */
+#if !defined(SETTINGS_DEF_CONFIG_PASS) || (defined(HAVE_MENU))
 S_BOOL(input_all_users_control_menu, INPUT_ALL_USERS_CONTROL_MENU,
       "all_users_control_menu",
       DEFAULT_ALL_USERS_CONTROL_MENU, SD_FLAG_NONE, 0, 0,

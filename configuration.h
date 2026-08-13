@@ -645,6 +645,7 @@ typedef struct settings
       bool input_menu_allow_tabs_back;
       bool input_menu_swap_ok_cancel_buttons;
       bool input_menu_swap_scroll_buttons;
+      bool input_menu_xbox_face_buttons;
       bool input_backtouch_enable;
       bool input_backtouch_toggle;
       bool input_small_keyboard_enable;
