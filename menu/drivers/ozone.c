@@ -7662,6 +7662,12 @@ OZONE_NOINLINE static void ozone_draw_messagebox(
    {
       settings_t  *settings                  = config_get_ptr();
       bool input_menu_swap_ok_cancel_buttons = settings->bools.input_menu_swap_ok_cancel_buttons;
+      /* XOR: the OK/Back icon position is chosen for the Nintendo
+       * layout by input_menu_swap_ok_cancel_buttons alone; flipping
+       * xbox_face_buttons on top re-derives the Xbox-layout position
+       * for whichever button ends up being OK/Back. */
+      bool ok_icon_at_bottom                 = (input_menu_swap_ok_cancel_buttons
+            != settings->bools.input_menu_xbox_face_buttons);
       float *col                             = ozone->theme_dynamic.entries_icon;
       float scale_factor                     = ozone->last_scale_factor;
       float icon_size                        = 50 * scale_factor;
@@ -7710,7 +7716,7 @@ OZONE_NOINLINE static void ozone_draw_messagebox(
             video_height,
             icon_size,
             icon_size,
-            input_menu_swap_ok_cancel_buttons
+            ok_icon_at_bottom
                   ? ozone->icons_textures[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_R]
                   : ozone->icons_textures[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_D],
             icon_x,
@@ -7778,7 +7784,7 @@ OZONE_NOINLINE static void ozone_draw_messagebox(
             video_height,
             icon_size,
             icon_size,
-            input_menu_swap_ok_cancel_buttons
+            ok_icon_at_bottom
                   ? ozone->icons_textures[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_D]
                   : ozone->icons_textures[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_R],
             icon_x,
@@ -11395,6 +11401,27 @@ static void ozone_draw_footer(
    gfx_display_ctx_driver_t *dispctx      = p_disp->dispctx;
    bool menu_core_enable                  = settings->bools.menu_core_enable;
    bool input_menu_swap_ok_cancel_buttons = settings->bools.input_menu_swap_ok_cancel_buttons;
+   /* XOR: the OK/Back icon position is chosen for the Nintendo layout
+    * by input_menu_swap_ok_cancel_buttons alone; flipping
+    * xbox_face_buttons on top re-derives the Xbox-layout position for
+    * whichever button ends up being OK/Back. The X/Y-button icons
+    * (search, thumbnails, random select, clear, scan) are precomputed
+    * the same way so every use below just references btn_x_tex/
+    * btn_y_tex instead of repeating the swap. */
+   bool xbox_face_buttons                 = settings->bools.input_menu_xbox_face_buttons;
+   bool ok_icon_at_bottom                 = (input_menu_swap_ok_cancel_buttons != xbox_face_buttons);
+   uintptr_t btn_ok_tex                   = ok_icon_at_bottom
+         ? icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_D]
+         : icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_R];
+   uintptr_t btn_back_tex                 = ok_icon_at_bottom
+         ? icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_R]
+         : icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_D];
+   uintptr_t btn_x_tex                    = xbox_face_buttons
+         ? icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_L]
+         : icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_U];
+   uintptr_t btn_y_tex                    = xbox_face_buttons
+         ? icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_U]
+         : icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_L];
    size_t selection                       = ozone->selection;
    float *col                             = ozone->theme_dynamic.entries_icon;
    float scale_factor                     = ozone->last_scale_factor;
@@ -11613,9 +11640,7 @@ static void ozone_draw_footer(
                video_height,
                icon_size,
                icon_size,
-               input_menu_swap_ok_cancel_buttons
-                     ? icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_D]
-                     : icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_R],
+               btn_ok_tex,
                ozone->footer_labels.ok.x,
                icon_y,
                video_width,
@@ -11633,9 +11658,7 @@ static void ozone_draw_footer(
                video_height,
                icon_size,
                icon_size,
-               input_menu_swap_ok_cancel_buttons
-                     ? icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_R]
-                     : icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_D],
+               btn_back_tex,
                ozone->footer_labels.back.x,
                icon_y,
                video_width,
@@ -11654,7 +11677,7 @@ static void ozone_draw_footer(
                   video_height,
                   icon_size,
                   icon_size,
-                  icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_U],
+                  btn_x_tex,
                   ozone->footer_labels.search.x,
                   icon_y,
                   video_width,
@@ -11673,7 +11696,7 @@ static void ozone_draw_footer(
                   video_height,
                   icon_size,
                   icon_size,
-                  icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_U],
+                  btn_x_tex,
                   ozone->footer_labels.cycle_thumbnails.x,
                   icon_y,
                   video_width,
@@ -11692,7 +11715,7 @@ static void ozone_draw_footer(
                   video_height,
                   icon_size,
                   icon_size,
-                  icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_L],
+                  btn_y_tex,
                   ozone->footer_labels.random_select.x,
                   icon_y,
                   video_width,
@@ -11712,7 +11735,7 @@ static void ozone_draw_footer(
                   icon_size,
                   icon_size,
                   (*ozone->savestate_thumbnail_file_path)
-                        ? icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_L]
+                        ? btn_y_tex
                         : icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_START],
                   ozone->footer_labels.fullscreen_thumbnails.x,
                   icon_y,
@@ -11789,7 +11812,7 @@ static void ozone_draw_footer(
                   video_height,
                   icon_size,
                   icon_size,
-                  icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_L],
+                  btn_y_tex,
                   ozone->footer_labels.clear_setting.x,
                   icon_y,
                   video_width,
@@ -11808,7 +11831,7 @@ static void ozone_draw_footer(
                   video_height,
                   icon_size,
                   icon_size,
-                  icons_tex[OZONE_ENTRIES_ICONS_TEXTURE_INPUT_BTN_L],
+                  btn_y_tex,
                   ozone->footer_labels.scan.x,
                   icon_y,
                   video_width,
