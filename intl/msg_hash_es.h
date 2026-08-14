@@ -4187,6 +4187,8 @@ static const struct
    char s_6f6d5b5a[11];
 #endif
    char s_2dbb6496[39];
+   char s_1a2b3c4d[43];
+   char s_5e6f7a8b[384];
 } msg_hash_es_blob =
 {
    "Back-end de servicio de IA",
@@ -9397,13 +9399,15 @@ static const struct
    "[Sin SSID]",
 #endif
    "B\303\272squeda de se\303\261ales wifi finalizada.",
+   "Intercambiar \303\255conos de botones de acci\303\263n",
+   "Intercambia la posici\303\263n en pantalla de los \303\255conos A/B y X/Y del RetroPad. Act\303\255valo si la distribuci\303\263n f\303\255sica de los botones de tu mando no coincide con la posici\303\263n de los \303\255conos mostrados por defecto. Afecta a los \303\255conos del Men\303\272 r\303\241pido > Controles, las listas de asignaci\303\263n de entradas y los \303\255conos A/B/X/Y del pie de p\303\241gina; no cambia qu\303\251 bot\303\263n realiza cada acci\303\263n.",
 };
 
 /* Contiguity check: char members have alignment 1, so any
  * compiler that pads this struct fails here instead of
  * misindexing at runtime. */
 typedef char msg_hash_es_blob_check[
-      (sizeof(msg_hash_es_blob) == (208157u
+      (sizeof(msg_hash_es_blob) == (208584u
 #ifdef ANDROID
        + 329u
 #endif
@@ -14005,4 +14009,6 @@ static const uint32_t msg_hash_es_ids[] =
    (uint32_t)MSG_WIFI_EMPTY_SSID,
 #endif
    (uint32_t)MSG_WIFI_SCAN_COMPLETE,
+   (uint32_t)MENU_ENUM_LABEL_VALUE_MENU_XBOX_FACE_BUTTONS,
+   (uint32_t)MENU_ENUM_SUBLABEL_MENU_XBOX_FACE_BUTTONS,
 };
