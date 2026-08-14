@@ -53,8 +53,8 @@ S_BOOL(input_menu_swap_scroll_buttons, MENU_INPUT_SWAP_SCROLL,
 S_BOOL(input_menu_xbox_face_buttons, MENU_XBOX_FACE_BUTTONS,
       "menu_xbox_face_buttons",
       DEFAULT_MENU_XBOX_FACE_BUTTONS, SD_FLAG_NONE, 0, 0,
-      "Xbox-Style Face Button Icons",
-      "Show A/B/X/Y RetroPad icons in the Xbox physical layout (A bottom, B right, X left, Y top) instead of the default Nintendo layout (B bottom, A right, Y left, X top). Affects icons shown in Quick Menu > Controls and input bind lists; does not change which button performs which action.")
+      "Swap Face Button Icons",
+      "Swap the on-screen position of the A/B and X/Y RetroPad icons. Enable if your controller's physical face-button layout doesn't match the icon positions shown by default. Affects icons shown in Quick Menu > Controls, input bind lists, and the OK/Back/X/Y footer icons; does not change which button performs which action.")
 #endif
 /* The configuration row lives under defined(HAVE_MENU); other passes are
  * unaffected. */
